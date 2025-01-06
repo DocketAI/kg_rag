@@ -673,15 +673,21 @@ async def _build_query_context(
             hl_relations_context,
             hl_text_units_context,
         )
+#     return f"""
+# -----Entities-----
+# ```csv
+# {entities_context}
+# ```
+# -----Relationships-----
+# ```csv
+# {relations_context}
+# ```
+# -----Sources-----
+# ```csv
+# {text_units_context}
+# ```
+# """
     return f"""
------Entities-----
-```csv
-{entities_context}
-```
------Relationships-----
-```csv
-{relations_context}
-```
 -----Sources-----
 ```csv
 {text_units_context}
