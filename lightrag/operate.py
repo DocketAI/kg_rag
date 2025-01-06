@@ -603,7 +603,8 @@ async def _build_query_context(
 
     ll_kewwords, hl_keywrds = query[0], query[1]
     if query_param.mode in ["local", "hybrid"]:
-        if ll_kewwords == "":
+        # if ll_kewwords == "":
+        if len(ll_kewwords) == 0:
             ll_entities_context, ll_relations_context, ll_text_units_context = (
                 "",
                 "",
@@ -626,7 +627,8 @@ async def _build_query_context(
                 query_param,
             )
     if query_param.mode in ["global", "hybrid"]:
-        if hl_keywrds == "":
+        # if hl_keywrds == "":
+        if len(hl_keywrds) == 0:
             hl_entities_context, hl_relations_context, hl_text_units_context = (
                 "",
                 "",
