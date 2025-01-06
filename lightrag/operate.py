@@ -529,13 +529,13 @@ async def kg_query(
     if ll_keywords == [] and query_param.mode in ["local", "hybrid"]:
         logger.warning("low_level_keywords is empty")
         return PROMPTS["fail_response"]
-    else:
-        ll_keywords = ", ".join(ll_keywords)
+    # else:
+    #     ll_keywords = ", ".join(ll_keywords)
     if hl_keywords == [] and query_param.mode in ["global", "hybrid"]:
         logger.warning("high_level_keywords is empty")
         return PROMPTS["fail_response"]
-    else:
-        hl_keywords = ", ".join(hl_keywords)
+    # else:
+    #     hl_keywords = ", ".join(hl_keywords)
 
     # Build context
     keywords = [ll_keywords, hl_keywords]
@@ -697,7 +697,11 @@ async def _get_node_data(
     query_param: QueryParam,
 ):
     # get similar entities
-    results = await entities_vdb.query(query, top_k=query_param.top_k)
+    results = await asyncio.gather(
+    *[entities_vdb.query(query_kw, top_k=query_param.top_k // len(query)) for query_kw in query]
+    )
+    results = [r for res in results for r in res]
+    # results = await entities_vdb.query(query, top_k=query_param.top_k)
     if not len(results):
         return "", "", ""
     # get entity information
@@ -901,7 +905,11 @@ async def _get_edge_data(
     text_chunks_db: BaseKVStorage[TextChunkSchema],
     query_param: QueryParam,
 ):
-    results = await relationships_vdb.query(keywords, top_k=query_param.top_k)
+    results = await asyncio.gather(
+    *[relationships_vdb.query(query_kw, top_k=query_param.top_k // len(keywords)) for query_kw in keywords]
+    )
+    results = [r for res in results for r in res]
+    # results = await relationships_vdb.query(keywords, top_k=query_param.top_k)
 
     if not len(results):
         return "", "", ""
