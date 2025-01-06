@@ -21,3 +21,5 @@ rag_storage
 venv/
 examples/input/
 examples/output/
+artifacts/*
+!.gitkeep
