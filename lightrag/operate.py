@@ -89,7 +89,7 @@ async def _handle_single_entity_extraction(
     record_attributes: list[str],
     chunk_key: str,
 ):
-    if len(record_attributes) < 4 or record_attributes[0] != '"entity"':
+    if len(record_attributes) < 4 or record_attributes[0] != "entity":
         return None
     # add this record as a node in the G
     entity_name = clean_str(record_attributes[1].upper())
@@ -110,7 +110,7 @@ async def _handle_single_relationship_extraction(
     record_attributes: list[str],
     chunk_key: str,
 ):
-    if len(record_attributes) < 5 or record_attributes[0] != '"relationship"':
+    if len(record_attributes) < 5 or record_attributes[0] != "relationship":
         return None
     # add this record as edge
     source = clean_str(record_attributes[1].upper())
@@ -220,7 +220,7 @@ async def _merge_edges_then_upsert(
                 node_data={
                     "source_id": source_id,
                     "description": description,
-                    "entity_type": '"UNKNOWN"',
+                    "entity_type": "UNKNOWN",
                 },
             )
     description = await _handle_entity_relation_summary(
@@ -341,6 +341,8 @@ async def extract_entities(
             if record is None:
                 continue
             record = record.group(1)
+            # removing apostrophes
+            record = record.replace('"', '')
             record_attributes = split_string_by_multi_markers(
                 record, [context_base["tuple_delimiter"]]
             )
