@@ -845,7 +845,9 @@ async def _find_most_related_text_unit_from_entities(
         return []
 
     all_text_units = sorted(
-        all_text_units, key=lambda x: (x["order"], -x["relation_counts"])
+        all_text_units, 
+        # key=lambda x: (x["order"], -x["relation_counts"]),
+        key=lambda x: (-x["relation_counts"]),
     )
 
     all_text_units = truncate_list_by_token_size(
