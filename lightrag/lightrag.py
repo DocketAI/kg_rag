@@ -577,7 +577,8 @@ class LightRAG:
             if self.entities_vdb is not None:
                 data_for_vdb = {
                     compute_mdhash_id(dp["entity_name"], prefix="ent-"): {
-                        "content": dp["entity_name"] + dp["description"],
+                        # "content": dp["entity_name"] + dp["description"],
+                        "content": dp["entity_name"],
                         "entity_name": dp["entity_name"],
                     }
                     for dp in all_entities_data

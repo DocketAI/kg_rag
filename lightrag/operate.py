@@ -435,7 +435,8 @@ async def extract_entities(
     if entity_vdb is not None:
         data_for_vdb = {
             compute_mdhash_id(dp["entity_name"], prefix="ent-"): {
-                "content": dp["entity_name"] + dp["description"],
+                # "content": dp["entity_name"] + dp["description"],
+                "content": dp["entity_name"],
                 "entity_name": dp["entity_name"],
             }
             for dp in all_entities_data
@@ -447,10 +448,10 @@ async def extract_entities(
             compute_mdhash_id(dp["src_id"] + dp["tgt_id"], prefix="rel-"): {
                 "src_id": dp["src_id"],
                 "tgt_id": dp["tgt_id"],
-                "content": dp["keywords"]
-                + dp["src_id"]
-                + dp["tgt_id"]
-                + dp["description"],
+                "content": dp["keywords"] + " "
+                + dp["src_id"] + " "
+                + dp["tgt_id"] + " ",
+                # + dp["description"],
                 "metadata": {
                     "created_at": dp.get("metadata", {}).get("created_at", time.time())
                 },
