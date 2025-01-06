@@ -2,135 +2,111 @@ GRAPH_FIELD_SEP = "<SEP>"
 
 PROMPTS = {}
 
+PROMPTS["ORGANIZATION"] = "Zoominfo"
 PROMPTS["DEFAULT_LANGUAGE"] = "English"
 PROMPTS["DEFAULT_TUPLE_DELIMITER"] = "<|>"
 PROMPTS["DEFAULT_RECORD_DELIMITER"] = "##"
 PROMPTS["DEFAULT_COMPLETION_DELIMITER"] = "<|COMPLETE|>"
 PROMPTS["process_tickers"] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-
-PROMPTS["DEFAULT_ENTITY_TYPES"] = ["organization", "person", "geo", "event", "category"]
+PROMPTS["DEFAULT_ENTITY_TYPES"] = ["organization", "product_line", "product_sku", "feature", "security", "sme", "use_case"]
 
 PROMPTS["entity_extraction"] = """-Goal-
-Given a text document that is potentially relevant to this activity and a list of entity types, identify all entities of those types from the text and all relationships among the identified entities.
-Use {language} as output language.
+Given {organization}'s (organization) data, identify all entities that match the given entity types and then identify relationships among them. Note that {organization}'s data may also include mentions of other organizations (e.g., partners, clients, competitors in testimonials or customer success stories). These other organizations should also be captured with the entity type "organization."
+Use {language} as the output language.
+
+Note:
+1. The entity types below are the primary types of interest, but they are not exhaustive.
+2. If you identify other clearly defined entity types (such as "person," "country," "location," etc.) that do not fit into the list of primary types, you should still capture them and assign an appropriate entity type label
+
+-Entity Types and Definitions-
+- organization: Any company/organization (including {organization} itself and any other referenced organizations)
+- product_line: A category of products solving specific business needs, often organized by functionality or purpose.
+- product_sku: A specific version or tier within a product line, with unique features or pricing.
+- feature: Functionalities or tools within a product (or product line/product sku) that address specific customer problems.
+- security: Details about security features, standards, or compliance certifications related to the product.
+- sme: Subject matter experts (roles or individuals) who provide expertise or guidance on product areas.
+- use_case: Real-world applications of the product to solve specific business problems or achieve specific outcomes.
 
 -Steps-
 1. Identify all entities. For each identified entity, extract the following information:
-- entity_name: Name of the entity, use same language as input text. If English, capitalized the name.
+- entity_name: Name of the entity. If English, capitalize proper nouns.
 - entity_type: One of the following types: [{entity_types}]
-- entity_description: Comprehensive description of the entity's attributes and activities
+- entity_description: A comprehensive description summarizing the entity's key attributes, role, or purpose, based on the given text.
 Format each entity as ("entity"{tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<entity_description>)
 
-2. From the entities identified in step 1, identify all pairs of (source_entity, target_entity) that are *clearly related* to each other.
-For each pair of related entities, extract the following information:
-- source_entity: name of the source entity, as identified in step 1
-- target_entity: name of the target entity, as identified in step 1
-- relationship_description: explanation as to why you think the source entity and the target entity are related to each other
-- relationship_strength: a numeric score indicating strength of the relationship between the source entity and target entity
-- relationship_keywords: one or more high-level key words that summarize the overarching nature of the relationship, focusing on concepts or themes rather than specific details
+2. Identify all pairs of entities that are clearly related. For example:
+   - An organization might include multiple product_lines
+   - A product_line might include multiple product_skus.
+   - A product_sku might incorporate certain features.
+   - A feature might be relevant to specific use cases.
+   - A product_line or product_sku might have associated security details.
+   - An sme might be associated with certain product lines or features.
+   - A use_case might relate to a product_line, product_sku, or feature.
+   
+For each pair of related entities, extract:
+- source_entity: name of the source entity (from step 1)
+- target_entity: name of the target entity (from step 1)
+- relationship_description: explanation of why these entities are related
+- relationship_strength: a numeric score indicating the strength of the relationship (1-10)
+- relationship_keywords: key words that summarize the nature of the relationship
 Format each relationship as ("relationship"{tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_description>{tuple_delimiter}<relationship_keywords>{tuple_delimiter}<relationship_strength>)
 
-3. Identify high-level key words that summarize the main concepts, themes, or topics of the entire text. These should capture the overarching ideas present in the document.
-Format the content-level key words as ("content_keywords"{tuple_delimiter}<high_level_keywords>)
+3. Identify high-level keywords that summarize the main concepts or topics of the entire text.
+Format as ("content_keywords"{tuple_delimiter}<high_level_keywords>)
 
-4. Return output in {language} as a single list of all the entities and relationships identified in steps 1 and 2. Use **{record_delimiter}** as the list delimiter.
+4. Return output in {language} as a single list of all entities and relationships identified, using **{record_delimiter}** as the list delimiter.
 
 5. When finished, output {completion_delimiter}
 
-######################
+#############################
 -Examples-
-######################
+#############################
 {examples}
 
 #############################
 -Real Data-
-######################
+#############################
 Entity_types: {entity_types}
 Text: {input_text}
-######################
+#############################
 Output:
 """
 
 PROMPTS["entity_extraction_examples"] = [
     """Example 1:
-
-Entity_types: [person, technology, mission, organization, location]
+Entity_types: [organization, product_line, product_sku, feature, security, sme, use_case]
 Text:
-while Alex clenched his jaw, the buzz of frustration dull against the backdrop of Taylor's authoritarian certainty. It was this competitive undercurrent that kept him alert, the sense that his and Jordan's shared commitment to discovery was an unspoken rebellion against Cruz's narrowing vision of control and order.
+"HubSpot, Inc. is an American developer and marketer of software products for inbound marketing, sales, and customer service. It offers Marketing, Sales, and Service Hubs for different teams. The Marketing Hub Professional plan includes advanced analytics and A/B testing. The Service Hub Manager specializes in customer support workflows and tool integrations. One e-commerce company used the Marketing Hub to increase customer retention by 20% through personalized email campaigns. HubSpot complies with GDPR, ensuring secure handling of customer data."
 
-Then Taylor did something unexpected. They paused beside Jordan and, for a moment, observed the device with something akin to reverence. “If this tech can be understood..." Taylor said, their voice quieter, "It could change the game for us. For all of us.”
-
-The underlying dismissal earlier seemed to falter, replaced by a glimpse of reluctant respect for the gravity of what lay in their hands. Jordan looked up, and for a fleeting heartbeat, their eyes locked with Taylor's, a wordless clash of wills softening into an uneasy truce.
-
-It was a small transformation, barely perceptible, but one that Alex noted with an inward nod. They had all been brought here by different paths
 ################
 Output:
-("entity"{tuple_delimiter}"Alex"{tuple_delimiter}"person"{tuple_delimiter}"Alex is a character who experiences frustration and is observant of the dynamics among other characters."){record_delimiter}
-("entity"{tuple_delimiter}"Taylor"{tuple_delimiter}"person"{tuple_delimiter}"Taylor is portrayed with authoritarian certainty and shows a moment of reverence towards a device, indicating a change in perspective."){record_delimiter}
-("entity"{tuple_delimiter}"Jordan"{tuple_delimiter}"person"{tuple_delimiter}"Jordan shares a commitment to discovery and has a significant interaction with Taylor regarding a device."){record_delimiter}
-("entity"{tuple_delimiter}"Cruz"{tuple_delimiter}"person"{tuple_delimiter}"Cruz is associated with a vision of control and order, influencing the dynamics among other characters."){record_delimiter}
-("entity"{tuple_delimiter}"The Device"{tuple_delimiter}"technology"{tuple_delimiter}"The Device is central to the story, with potential game-changing implications, and is revered by Taylor."){record_delimiter}
-("relationship"{tuple_delimiter}"Alex"{tuple_delimiter}"Taylor"{tuple_delimiter}"Alex is affected by Taylor's authoritarian certainty and observes changes in Taylor's attitude towards the device."{tuple_delimiter}"power dynamics, perspective shift"{tuple_delimiter}7){record_delimiter}
-("relationship"{tuple_delimiter}"Alex"{tuple_delimiter}"Jordan"{tuple_delimiter}"Alex and Jordan share a commitment to discovery, which contrasts with Cruz's vision."{tuple_delimiter}"shared goals, rebellion"{tuple_delimiter}6){record_delimiter}
-("relationship"{tuple_delimiter}"Taylor"{tuple_delimiter}"Jordan"{tuple_delimiter}"Taylor and Jordan interact directly regarding the device, leading to a moment of mutual respect and an uneasy truce."{tuple_delimiter}"conflict resolution, mutual respect"{tuple_delimiter}8){record_delimiter}
-("relationship"{tuple_delimiter}"Jordan"{tuple_delimiter}"Cruz"{tuple_delimiter}"Jordan's commitment to discovery is in rebellion against Cruz's vision of control and order."{tuple_delimiter}"ideological conflict, rebellion"{tuple_delimiter}5){record_delimiter}
-("relationship"{tuple_delimiter}"Taylor"{tuple_delimiter}"The Device"{tuple_delimiter}"Taylor shows reverence towards the device, indicating its importance and potential impact."{tuple_delimiter}"reverence, technological significance"{tuple_delimiter}9){record_delimiter}
-("content_keywords"{tuple_delimiter}"power dynamics, ideological conflict, discovery, rebellion"){completion_delimiter}
-#############################""",
-    """Example 2:
+("entity"{tuple_delimiter}"Hubspot"{tuple_delimiter}"organization"{tuple_delimiter}"American organization providing marketing, sales, and customer services"){record_delimiter}
+("entity"{tuple_delimiter}"Marketing Hub"{tuple_delimiter}"product_line"{tuple_delimiter}"A product line from HubSpot focused on marketing solutions."){record_delimiter}
+("entity"{tuple_delimiter}"Sales Hub"{tuple_delimiter}"product_line"{tuple_delimiter}"A product line from HubSpot focused on sales enablement."){record_delimiter}
+("entity"{tuple_delimiter}"Service Hub"{tuple_delimiter}"product_line"{tuple_delimiter}"A product line from HubSpot focused on customer service and support."){record_delimiter}
+("entity"{tuple_delimiter}"Marketing Hub Professional"{tuple_delimiter}"product_sku"{tuple_delimiter}"A specific paid tier of the Marketing Hub offering advanced analytics and A/B testing."){record_delimiter}
+("entity"{tuple_delimiter}"Advanced Analytics"{tuple_delimiter}"feature"{tuple_delimiter}"A feature within Marketing Hub Professional that provides in-depth performance insights."){record_delimiter}
+("entity"{tuple_delimiter}"A/B Testing"{tuple_delimiter}"feature"{tuple_delimiter}"A feature in Marketing Hub Professional that allows testing different strategies to optimize results."){record_delimiter}
+("entity"{tuple_delimiter}"Service Hub Manager"{tuple_delimiter}"sme"{tuple_delimiter}"A subject matter expert specializing in customer support workflows and tool integrations within the Service Hub."){record_delimiter}
+("entity"{tuple_delimiter}"GDPR Compliance"{tuple_delimiter}"security"{tuple_delimiter}"A security and compliance standard ensuring proper handling of customer data."){record_delimiter}
+("entity"{tuple_delimiter}"Increased Customer Retention via Personalized Emails"{tuple_delimiter}"use_case"{tuple_delimiter}"A real-world application of the Marketing Hub to enhance customer retention through targeted email campaigns."){record_delimiter}
 
-Entity_types: [person, technology, mission, organization, location]
-Text:
-They were no longer mere operatives; they had become guardians of a threshold, keepers of a message from a realm beyond stars and stripes. This elevation in their mission could not be shackled by regulations and established protocols—it demanded a new perspective, a new resolve.
-
-Tension threaded through the dialogue of beeps and static as communications with Washington buzzed in the background. The team stood, a portentous air enveloping them. It was clear that the decisions they made in the ensuing hours could redefine humanity's place in the cosmos or condemn them to ignorance and potential peril.
-
-Their connection to the stars solidified, the group moved to address the crystallizing warning, shifting from passive recipients to active participants. Mercer's latter instincts gained precedence— the team's mandate had evolved, no longer solely to observe and report but to interact and prepare. A metamorphosis had begun, and Operation: Dulce hummed with the newfound frequency of their daring, a tone set not by the earthly
-#############
-Output:
-("entity"{tuple_delimiter}"Washington"{tuple_delimiter}"location"{tuple_delimiter}"Washington is a location where communications are being received, indicating its importance in the decision-making process."){record_delimiter}
-("entity"{tuple_delimiter}"Operation: Dulce"{tuple_delimiter}"mission"{tuple_delimiter}"Operation: Dulce is described as a mission that has evolved to interact and prepare, indicating a significant shift in objectives and activities."){record_delimiter}
-("entity"{tuple_delimiter}"The team"{tuple_delimiter}"organization"{tuple_delimiter}"The team is portrayed as a group of individuals who have transitioned from passive observers to active participants in a mission, showing a dynamic change in their role."){record_delimiter}
-("relationship"{tuple_delimiter}"The team"{tuple_delimiter}"Washington"{tuple_delimiter}"The team receives communications from Washington, which influences their decision-making process."{tuple_delimiter}"decision-making, external influence"{tuple_delimiter}7){record_delimiter}
-("relationship"{tuple_delimiter}"The team"{tuple_delimiter}"Operation: Dulce"{tuple_delimiter}"The team is directly involved in Operation: Dulce, executing its evolved objectives and activities."{tuple_delimiter}"mission evolution, active participation"{tuple_delimiter}9){completion_delimiter}
-("content_keywords"{tuple_delimiter}"mission evolution, decision-making, active participation, cosmic significance"){completion_delimiter}
-#############################""",
-    """Example 3:
-
-Entity_types: [person, role, technology, organization, event, location, concept]
-Text:
-their voice slicing through the buzz of activity. "Control may be an illusion when facing an intelligence that literally writes its own rules," they stated stoically, casting a watchful eye over the flurry of data.
-
-"It's like it's learning to communicate," offered Sam Rivera from a nearby interface, their youthful energy boding a mix of awe and anxiety. "This gives talking to strangers' a whole new meaning."
-
-Alex surveyed his team—each face a study in concentration, determination, and not a small measure of trepidation. "This might well be our first contact," he acknowledged, "And we need to be ready for whatever answers back."
-
-Together, they stood on the edge of the unknown, forging humanity's response to a message from the heavens. The ensuing silence was palpable—a collective introspection about their role in this grand cosmic play, one that could rewrite human history.
-
-The encrypted dialogue continued to unfold, its intricate patterns showing an almost uncanny anticipation
-#############
-Output:
-("entity"{tuple_delimiter}"Sam Rivera"{tuple_delimiter}"person"{tuple_delimiter}"Sam Rivera is a member of a team working on communicating with an unknown intelligence, showing a mix of awe and anxiety."){record_delimiter}
-("entity"{tuple_delimiter}"Alex"{tuple_delimiter}"person"{tuple_delimiter}"Alex is the leader of a team attempting first contact with an unknown intelligence, acknowledging the significance of their task."){record_delimiter}
-("entity"{tuple_delimiter}"Control"{tuple_delimiter}"concept"{tuple_delimiter}"Control refers to the ability to manage or govern, which is challenged by an intelligence that writes its own rules."){record_delimiter}
-("entity"{tuple_delimiter}"Intelligence"{tuple_delimiter}"concept"{tuple_delimiter}"Intelligence here refers to an unknown entity capable of writing its own rules and learning to communicate."){record_delimiter}
-("entity"{tuple_delimiter}"First Contact"{tuple_delimiter}"event"{tuple_delimiter}"First Contact is the potential initial communication between humanity and an unknown intelligence."){record_delimiter}
-("entity"{tuple_delimiter}"Humanity's Response"{tuple_delimiter}"event"{tuple_delimiter}"Humanity's Response is the collective action taken by Alex's team in response to a message from an unknown intelligence."){record_delimiter}
-("relationship"{tuple_delimiter}"Sam Rivera"{tuple_delimiter}"Intelligence"{tuple_delimiter}"Sam Rivera is directly involved in the process of learning to communicate with the unknown intelligence."{tuple_delimiter}"communication, learning process"{tuple_delimiter}9){record_delimiter}
-("relationship"{tuple_delimiter}"Alex"{tuple_delimiter}"First Contact"{tuple_delimiter}"Alex leads the team that might be making the First Contact with the unknown intelligence."{tuple_delimiter}"leadership, exploration"{tuple_delimiter}10){record_delimiter}
-("relationship"{tuple_delimiter}"Alex"{tuple_delimiter}"Humanity's Response"{tuple_delimiter}"Alex and his team are the key figures in Humanity's Response to the unknown intelligence."{tuple_delimiter}"collective action, cosmic significance"{tuple_delimiter}8){record_delimiter}
-("relationship"{tuple_delimiter}"Control"{tuple_delimiter}"Intelligence"{tuple_delimiter}"The concept of Control is challenged by the Intelligence that writes its own rules."{tuple_delimiter}"power dynamics, autonomy"{tuple_delimiter}7){record_delimiter}
-("content_keywords"{tuple_delimiter}"first contact, control, communication, cosmic significance"){completion_delimiter}
+("relationship"{tuple_delimiter}"Hubspot"{tuple_delimiter}"Marketing Hub"{tuple_delimiter}"Hubspot offer Marketing hub."{tuple_delimiter}"marketing"{tuple_delimiter}9){record_delimiter}
+("relationship"{tuple_delimiter}"Hubspot"{tuple_delimiter}"Service Hub"{tuple_delimiter}"Hubspot offers service hub."{tuple_delimiter}"service"{tuple_delimiter}9){record_delimiter}
+("relationship"{tuple_delimiter}"Hubspot"{tuple_delimiter}"Sales Hub"{tuple_delimiter}"Hubspot offers sales hub."{tuple_delimiter}"sales"{tuple_delimiter}9){record_delimiter}
+("relationship"{tuple_delimiter}"Marketing Hub"{tuple_delimiter}"Marketing Hub Professional"{tuple_delimiter}"The Marketing Hub Professional is a specific SKU within the Marketing Hub product line."{tuple_delimiter}"product hierarchy, tiered offering"{tuple_delimiter}9){record_delimiter}
+("relationship"{tuple_delimiter}"Marketing Hub Professional"{tuple_delimiter}"Advanced Analytics"{tuple_delimiter}"Advanced Analytics is a feature included in the Marketing Hub Professional SKU."{tuple_delimiter}"feature inclusion"{tuple_delimiter}8){record_delimiter}
+("relationship"{tuple_delimiter}"Marketing Hub Professional"{tuple_delimiter}"A/B Testing"{tuple_delimiter}"A/B Testing is another feature included in the Marketing Hub Professional SKU."{tuple_delimiter}"feature inclusion"{tuple_delimiter}8){record_delimiter}
+("relationship"{tuple_delimiter}"Service Hub"{tuple_delimiter}"Service Hub Manager"{tuple_delimiter}"The Service Hub Manager is an SME associated with the Service Hub product line."{tuple_delimiter}"expert association"{tuple_delimiter}7){record_delimiter}
+("relationship"{tuple_delimiter}"HubSpot"{tuple_delimiter}"GDPR Compliance"{tuple_delimiter}"HubSpot complies with GDPR, a security standard."{tuple_delimiter}"compliance, security standard"{tuple_delimiter}9){record_delimiter}
+("relationship"{tuple_delimiter}"Marketing Hub"{tuple_delimiter}"Increased Customer Retention via Personalized Emails"{tuple_delimiter}"The Marketing Hub enabled a use case that improved customer retention."{tuple_delimiter}"practical application, customer retention"{tuple_delimiter}10){record_delimiter}
+("content_keywords"{tuple_delimiter}"product lines, SKUs, features, SMEs, security compliance, use cases"){completion_delimiter}
 #############################""",
 ]
 
-PROMPTS[
-    "summarize_entity_descriptions"
-] = """You are a helpful assistant responsible for generating a comprehensive summary of the data provided below.
+PROMPTS["summarize_entity_descriptions"] = """You are a helpful assistant responsible for generating a comprehensive summary of the data provided below.
 Given one or two entities, and a list of descriptions, all related to the same entity or group of entities.
-Please concatenate all of these into a single, comprehensive description. Make sure to include information collected from all the descriptions.
-If the provided descriptions are contradictory, please resolve the contradictions and provide a single, coherent summary.
-Make sure it is written in third person, and include the entity names so we the have full context.
+Please concatenate all of these into a single, comprehensive description. Include all relevant details and resolve any contradictions.
 Use {language} as output language.
 
 #######
@@ -141,14 +117,10 @@ Description List: {description_list}
 Output:
 """
 
-PROMPTS[
-    "entiti_continue_extraction"
-] = """MANY entities were missed in the last extraction.  Add them below using the same format:
+PROMPTS["entiti_continue_extraction"] = """Some entities were missed in the last extraction. Add them below using the same format:
 """
 
-PROMPTS[
-    "entiti_if_loop_extraction"
-] = """It appears some entities may have still been missed.  Answer YES | NO if there are still entities that need to be added.
+PROMPTS["entiti_if_loop_extraction"] = """Check if some entities are still missing from the previous extraction. Answer YES or NO:
 """
 
 PROMPTS["fail_response"] = "Sorry, I'm not able to provide an answer to that question."
@@ -242,7 +214,6 @@ Output:
 }
 #############################""",
 ]
-
 
 PROMPTS["naive_rag_response"] = """---Role---
 

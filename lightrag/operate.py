@@ -262,6 +262,7 @@ async def extract_entities(
     language = global_config["addon_params"].get(
         "language", PROMPTS["DEFAULT_LANGUAGE"]
     )
+    organization = PROMPTS["ORGANIZATION"]
     entity_types = global_config["addon_params"].get(
         "entity_types", PROMPTS["DEFAULT_ENTITY_TYPES"]
     )
@@ -291,6 +292,7 @@ async def extract_entities(
         entity_types=",".join(entity_types),
         examples=examples,
         language=language,
+        organization=organization,
     )
 
     continue_prompt = PROMPTS["entiti_continue_extraction"]
