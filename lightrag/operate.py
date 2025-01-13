@@ -617,7 +617,7 @@ async def _build_query_context(
         else:
             (
                 ll_entities_context,
-                ll_relations_context,
+                ll_relations_context, 
                 ll_text_units_context,
             ) = await _get_node_data(
                 ll_kewwords,
@@ -675,21 +675,15 @@ async def _build_query_context(
             hl_relations_context,
             hl_text_units_context,
         )
-#     return f"""
-# -----Entities-----
-# ```csv
-# {entities_context}
-# ```
-# -----Relationships-----
-# ```csv
-# {relations_context}
-# ```
-# -----Sources-----
-# ```csv
-# {text_units_context}
-# ```
-# """
     return f"""
+-----Entities-----
+```csv
+{entities_context}
+```
+-----Relationships-----
+```csv
+{relations_context}
+```
 -----Sources-----
 ```csv
 {text_units_context}
