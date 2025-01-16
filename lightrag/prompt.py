@@ -1,5 +1,5 @@
 GRAPH_FIELD_SEP = "<SEP>"
-
+AGG_CHUNK_SEP = "<CID>"
 PROMPTS = {}
 
 PROMPTS["ORGANIZATION"] = "Zoominfo"

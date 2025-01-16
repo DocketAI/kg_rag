@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import partial
 from typing import Type, cast, Dict
+from .chunks import get_chunks
 
 from .llm import (
     gpt_4o_mini_complete,
@@ -314,6 +315,10 @@ class LightRAG:
     def insert(self, string_or_strings):
         loop = always_get_an_event_loop()
         return loop.run_until_complete(self.ainsert(string_or_strings))
+    
+    def insert_chunks(self, company_id):
+        loop = always_get_an_event_loop()
+        return loop.run_until_complete(self.ainsert_chunks(company_id))
 
     async def ainsert(self, string_or_strings):
         """Insert documents with checkpoint support
@@ -449,6 +454,30 @@ class LightRAG:
                 finally:
                     # Ensure all indexes are updated after each document
                     await self._insert_done()
+
+    async def ainsert_chunks(self, company_id):
+        """Insert chunks
+        """
+        # Extract and store entities and relationships
+        chunks = get_chunks(
+            min_tokens=1200,
+            company_id=company_id
+        )
+        maybe_new_kg = await extract_entities(
+            chunks,
+            knowledge_graph_inst=self.chunk_entity_relation_graph,
+            entity_vdb=self.entities_vdb,
+            relationships_vdb=self.relationships_vdb,
+            global_config=asdict(self),
+        )
+
+        if maybe_new_kg is None:
+            raise Exception(
+                "Failed to extract entities and relationships"
+            )
+
+        self.chunk_entity_relation_graph = maybe_new_kg
+        await self._insert_done()
 
     async def _insert_done(self):
         tasks = []

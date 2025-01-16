@@ -543,3 +543,31 @@ def safe_unicode_decode(content):
     )
 
     return decoded_content
+
+def merge_texts(textA, textB):
+    wordsA = textA.split()
+    wordsB = textB.split()
+    
+    max_overlap = 0
+    for i in range(len(wordsA), 0, -1):
+        suffixA = wordsA[i-1:]
+        
+        if suffixA == wordsB[:len(suffixA)]:
+            max_overlap = len(suffixA)
+            break
+
+    if max_overlap > 0:
+        merged_words = wordsA + wordsB[max_overlap:]
+    else:
+        merged_words = wordsA + wordsB
+
+    return ' '.join(merged_words)
+
+
+def merge_content(content_list):
+    assert isinstance(content_list, list)
+    strA = content_list[0]
+    for i in range(1, len(content_list)):
+        strB = content_list[i]
+        strA = merge_texts(strA, strB)
+    return strA

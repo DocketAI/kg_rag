@@ -146,7 +146,19 @@ async def insert_file(file: UploadFile = File(...)):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/insert_chunks", response_model=Response)
+async def insert_chunks(company_id: int):
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: rag.insert_chunks(company_id))
 
+        return Response(
+            status="success",
+            message=f"Chunks from inserted successfully",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 async def health_check():

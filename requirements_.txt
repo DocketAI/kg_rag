@@ -38,6 +38,7 @@ ollama==0.4.5
 openai==1.59.3
 packaging==24.2
 propcache==0.2.1
+psycopg2-binary==2.9.10
 pydantic==2.10.4
 pydantic_core==2.27.2
 python-dateutil==2.9.0.post0
