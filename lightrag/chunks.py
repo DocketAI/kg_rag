@@ -4,7 +4,11 @@ import psycopg2
 from .base import TextChunkSchema
 from .utils import encode_string_by_tiktoken, merge_content
 from .prompt import AGG_CHUNK_SEP
-from .config import config_file, chunks_table
+from .config import (
+    config_file,
+    chunks_table,
+    subgraph_sources,
+)
 
 
 def get_file(file, env):
@@ -65,10 +69,10 @@ def get_chunks(
 
         offset = 0
         while offset < total_rows:
-            if offset == 500:
+            if offset == 200:
                 break
             query = f"""
-                SELECT chunk_id, content, sequence, source_id
+                SELECT chunk_id, content, sequence, source_id, source
                 FROM {chunks_table} WHERE company_id = {company_id}
                 ORDER BY source_id, sequence
                 LIMIT {batch_size} OFFSET {offset}
@@ -79,7 +83,7 @@ def get_chunks(
             if not rows:
                 break
 
-            for (chunk_id, content, sequence, source_id) in rows:
+            for (chunk_id, content, sequence, source_id, source) in rows:
 
                 if current_source_id is not None and source_id != current_source_id:
                     if current_chunk_ids:
@@ -90,7 +94,8 @@ def get_chunks(
                             "chunk_id": combined_chunk_id,
                             "content": merged_content,
                             "sequence": combined_sequence,
-                            "source_id": current_source_id
+                            "source_id": current_source_id,
+                            "subgraphs": subgraph_sources.get(source, []),
                         })
                         current_chunk_ids = []
                         current_contents = []
@@ -113,7 +118,8 @@ def get_chunks(
                         "chunk_id": combined_chunk_id,
                         "content": merged_content,
                         "sequence": combined_sequence,
-                        "source_id": current_source_id
+                        "source_id": current_source_id,
+                        "subgraphs": subgraph_sources.get(source, []),
                     })
                     
                     combined_sequence += 1
@@ -133,7 +139,8 @@ def get_chunks(
                 "chunk_id": combined_chunk_id,
                 "content": merged_content,
                 "sequence": combined_sequence,
-                "source_id": current_source_id
+                "source_id": current_source_id,
+                "subgraphs": subgraph_sources.get(source, []),
             })
             
         return {
@@ -141,7 +148,8 @@ def get_chunks(
                             tokens=ch["tokens"],
                             content=ch["content"],
                             full_doc_id=str(ch["source_id"]),
-                            chunk_order_index=ch["sequence"]
+                            chunk_order_index=ch["sequence"],
+                            subgraphs=ch["subgraphs"]
                         )
             for ch in combined_chunks
         }

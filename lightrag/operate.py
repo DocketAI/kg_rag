@@ -29,7 +29,7 @@ from .base import (
     TextChunkSchema,
     QueryParam,
 )
-from .prompt import GRAPH_FIELD_SEP, PROMPTS
+from .prompt import GRAPH_FIELD_SEP, SUBGRAPH_FIELD_SEP, PROMPTS
 import time
 
 
@@ -142,6 +142,7 @@ async def _merge_nodes_then_upsert(
     already_entity_types = []
     already_source_ids = []
     already_description = []
+    already_subgraphs = []
 
     already_node = await knowledge_graph_inst.get_node(entity_name)
     if already_node is not None:
@@ -150,6 +151,9 @@ async def _merge_nodes_then_upsert(
             split_string_by_multi_markers(already_node["source_id"], [GRAPH_FIELD_SEP])
         )
         already_description.append(already_node["description"])
+        already_subgraphs.extend(
+            split_string_by_multi_markers(already_node["subgraphs"], [SUBGRAPH_FIELD_SEP])
+        )
 
     entity_type = sorted(
         Counter(
@@ -167,10 +171,14 @@ async def _merge_nodes_then_upsert(
     description = await _handle_entity_relation_summary(
         entity_name, description, global_config
     )
+    subgraphs = SUBGRAPH_FIELD_SEP.join(
+        set([sg for dp in nodes_data for sg in dp["subgraphs"]] + already_subgraphs)
+    )
     node_data = dict(
         entity_type=entity_type,
         description=description,
         source_id=source_id,
+        subgraphs=subgraphs
     )
     await knowledge_graph_inst.upsert_node(
         entity_name,
@@ -191,6 +199,7 @@ async def _merge_edges_then_upsert(
     already_source_ids = []
     already_description = []
     already_keywords = []
+    already_subgraphs = []
 
     if await knowledge_graph_inst.has_edge(src_id, tgt_id):
         already_edge = await knowledge_graph_inst.get_edge(src_id, tgt_id)
@@ -202,6 +211,9 @@ async def _merge_edges_then_upsert(
         already_keywords.extend(
             split_string_by_multi_markers(already_edge["keywords"], [GRAPH_FIELD_SEP])
         )
+        already_subgraphs.extend(
+            split_string_by_multi_markers(already_edge["subgraphs"], [SUBGRAPH_FIELD_SEP])
+        )
 
     weight = sum([dp["weight"] for dp in edges_data] + already_weights)
     description = GRAPH_FIELD_SEP.join(
@@ -212,6 +224,9 @@ async def _merge_edges_then_upsert(
     )
     source_id = GRAPH_FIELD_SEP.join(
         set([dp["source_id"] for dp in edges_data] + already_source_ids)
+    )
+    subgraphs = SUBGRAPH_FIELD_SEP.join(
+        set([sg for dp in edges_data for sg in dp["subgraphs"]] + already_subgraphs)
     )
     for need_insert_id in [src_id, tgt_id]:
         if not (await knowledge_graph_inst.has_node(need_insert_id)):
@@ -234,6 +249,7 @@ async def _merge_edges_then_upsert(
             description=description,
             keywords=keywords,
             source_id=source_id,
+            subgraphs=subgraphs
         ),
     )
 
@@ -242,6 +258,7 @@ async def _merge_edges_then_upsert(
         tgt_id=tgt_id,
         description=description,
         keywords=keywords,
+        subgraphs=subgraphs,
     )
 
     return edge_data
@@ -350,6 +367,7 @@ async def extract_entities(
                 record_attributes, chunk_key
             )
             if if_entities is not None:
+                if_entities["subgraphs"] = chunk_dp["subgraphs"]
                 maybe_nodes[if_entities["entity_name"]].append(if_entities)
                 continue
 
@@ -357,6 +375,7 @@ async def extract_entities(
                 record_attributes, chunk_key
             )
             if if_relation is not None:
+                if_relation["subgraphs"] = chunk_dp["subgraphs"]
                 maybe_edges[(if_relation["src_id"], if_relation["tgt_id"])].append(
                     if_relation
                 )
@@ -435,7 +454,7 @@ async def extract_entities(
     if entity_vdb is not None:
         data_for_vdb = {
             compute_mdhash_id(dp["entity_name"], prefix="ent-"): {
-                # "content": dp["entity_name"] + dp["description"],
+                # "content": dp["entity_name"] + ": " + dp["description"],
                 "content": dp["entity_name"],
                 "entity_name": dp["entity_name"],
             }

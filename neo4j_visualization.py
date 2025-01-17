@@ -62,7 +62,8 @@ def main():
     SET e.entity_type = node.entity_type,
         e.description = node.description,
         e.source_id = node.source_id,
-        e.displayName = node.id
+        e.displayName = node.id,
+        e.subgraphs = node.subgraphs
     REMOVE e:Entity
     WITH e, node
     CALL apoc.create.addLabels(e, [node.entity_type]) YIELD node AS labeledNode
@@ -86,7 +87,8 @@ def main():
       weight: edge.weight,
       description: edge.description,
       keywords: edge.keywords,
-      source_id: edge.source_id
+      source_id: edge.source_id,
+      subgraphs: edge.subgraphs
     }, target) YIELD rel
     RETURN count(*)
     """

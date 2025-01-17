@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import TypedDict, Union, Literal, Generic, TypeVar, Optional, Dict, Any
+from typing import TypedDict, Union, Literal, Generic, TypeVar, Optional, Dict, List, Any
 from enum import Enum
 
 import numpy as np
@@ -8,7 +8,7 @@ from .utils import EmbeddingFunc
 
 TextChunkSchema = TypedDict(
     "TextChunkSchema",
-    {"tokens": int, "content": str, "full_doc_id": str, "chunk_order_index": int},
+    {"tokens": int, "content": str, "full_doc_id": str, "chunk_order_index": int, "subgraphs": List[str]},
 )
 
 T = TypeVar("T")
