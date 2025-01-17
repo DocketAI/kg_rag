@@ -477,6 +477,7 @@ class LightRAG:
             )
 
         self.chunk_entity_relation_graph = maybe_new_kg
+        await self.text_chunks.upsert(chunks)
         await self._insert_done()
 
     async def _insert_done(self):
