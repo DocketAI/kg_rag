@@ -556,6 +556,9 @@ async def kg_query(
     # else:
     #     hl_keywords = ", ".join(hl_keywords)
 
+    # also using query to find matching entities
+    ll_keywords.insert(0, query)
+    hl_keywords.insert(0, query)
     # Build context
     keywords = [ll_keywords, hl_keywords]
     context = await _build_query_context(
@@ -610,7 +613,7 @@ async def kg_query(
 
 
 async def _build_query_context(
-    query: list,
+    keywords: list,
     knowledge_graph_inst: BaseGraphStorage,
     entities_vdb: BaseVectorStorage,
     relationships_vdb: BaseVectorStorage,
@@ -620,10 +623,11 @@ async def _build_query_context(
     # ll_entities_context, ll_relations_context, ll_text_units_context = "", "", ""
     # hl_entities_context, hl_relations_context, hl_text_units_context = "", "", ""
 
-    ll_kewwords, hl_keywrds = query[0], query[1]
+    ll_keywords, hl_keywords = keywords[0], keywords[1]
+
     if query_param.mode in ["local", "hybrid"]:
         # if ll_kewwords == "":
-        if len(ll_kewwords) == 0:
+        if len(ll_keywords) == 0:
             ll_entities_context, ll_relations_context, ll_text_units_context = (
                 "",
                 "",
@@ -639,7 +643,7 @@ async def _build_query_context(
                 ll_relations_context, 
                 ll_text_units_context,
             ) = await _get_node_data(
-                ll_kewwords,
+                ll_keywords,
                 knowledge_graph_inst,
                 entities_vdb,
                 text_chunks_db,
@@ -647,7 +651,7 @@ async def _build_query_context(
             )
     if query_param.mode in ["global", "hybrid"]:
         # if hl_keywrds == "":
-        if len(hl_keywrds) == 0:
+        if len(hl_keywords) == 0:
             hl_entities_context, hl_relations_context, hl_text_units_context = (
                 "",
                 "",
@@ -663,7 +667,7 @@ async def _build_query_context(
                 hl_relations_context,
                 hl_text_units_context,
             ) = await _get_edge_data(
-                hl_keywrds,
+                hl_keywords,
                 knowledge_graph_inst,
                 relationships_vdb,
                 text_chunks_db,
@@ -709,9 +713,8 @@ async def _build_query_context(
 ```
 """
 
-
 async def _get_node_data(
-    query,
+    keywords,
     knowledge_graph_inst: BaseGraphStorage,
     entities_vdb: BaseVectorStorage,
     text_chunks_db: BaseKVStorage[TextChunkSchema],
@@ -719,7 +722,7 @@ async def _get_node_data(
 ):
     # get similar entities
     results = await asyncio.gather(
-    *[entities_vdb.query(query_kw, top_k=query_param.top_k // len(query)) for query_kw in query]
+    *[entities_vdb.query(kw, top_k=query_param.top_k // len(keywords)) for kw in keywords]
     )
     results = [r for res in results for r in res]
     # results = await entities_vdb.query(query, top_k=query_param.top_k)
@@ -928,8 +931,9 @@ async def _get_edge_data(
     text_chunks_db: BaseKVStorage[TextChunkSchema],
     query_param: QueryParam,
 ):
+    
     results = await asyncio.gather(
-    *[relationships_vdb.query(query_kw, top_k=query_param.top_k // len(keywords)) for query_kw in keywords]
+    *[relationships_vdb.query(kw, top_k=query_param.top_k // len(keywords)) for kw in keywords]
     )
     results = [r for res in results for r in res]
     # results = await relationships_vdb.query(keywords, top_k=query_param.top_k)
