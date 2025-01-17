@@ -155,7 +155,7 @@ async def insert_chunks(company_id: int):
 
         return Response(
             status="success",
-            message=f"Chunks from inserted successfully",
+            message=f"Chunks inserted successfully",
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
