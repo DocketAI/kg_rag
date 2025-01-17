@@ -23,3 +23,6 @@ examples/input/
 examples/output/
 artifacts/*
 !.gitkeep
+data/*
+.DS_Store
+*.ipynb
