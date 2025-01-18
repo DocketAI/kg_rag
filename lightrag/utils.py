@@ -281,9 +281,6 @@ def xml_to_json(xml_file):
                 "source_id": edge.find("./data[@key='d7']", namespace).text
                 if edge.find("./data[@key='d7']", namespace) is not None
                 else "",
-                "subgraphs": edge.find("./data[@key='d8']", namespace).text
-                if edge.find("./data[@key='d8']", namespace) is not None
-                else "",
             }
             data["edges"].append(edge_data)
 

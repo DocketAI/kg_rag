@@ -29,7 +29,7 @@ from .base import (
     TextChunkSchema,
     QueryParam,
 )
-from .prompt import GRAPH_FIELD_SEP, SUBGRAPH_FIELD_SEP, PROMPTS
+from .prompt import GRAPH_FIELD_SEP, SUBGRAPH_SEP, PROMPTS
 import time
 
 
@@ -152,7 +152,7 @@ async def _merge_nodes_then_upsert(
         )
         already_description.append(already_node["description"])
         already_subgraphs.extend(
-            split_string_by_multi_markers(already_node["subgraphs"], [SUBGRAPH_FIELD_SEP])
+            split_string_by_multi_markers(already_node["subgraphs"], [SUBGRAPH_SEP])
         )
 
     entity_type = sorted(
@@ -171,7 +171,7 @@ async def _merge_nodes_then_upsert(
     description = await _handle_entity_relation_summary(
         entity_name, description, global_config
     )
-    subgraphs = SUBGRAPH_FIELD_SEP.join(
+    subgraphs = SUBGRAPH_SEP.join(
         set([sg for dp in nodes_data for sg in dp["subgraphs"]] + already_subgraphs)
     )
     node_data = dict(
@@ -212,7 +212,7 @@ async def _merge_edges_then_upsert(
             split_string_by_multi_markers(already_edge["keywords"], [GRAPH_FIELD_SEP])
         )
         already_subgraphs.extend(
-            split_string_by_multi_markers(already_edge["subgraphs"], [SUBGRAPH_FIELD_SEP])
+            split_string_by_multi_markers(already_edge["subgraphs"], [SUBGRAPH_SEP])
         )
 
     weight = sum([dp["weight"] for dp in edges_data] + already_weights)
@@ -225,7 +225,7 @@ async def _merge_edges_then_upsert(
     source_id = GRAPH_FIELD_SEP.join(
         set([dp["source_id"] for dp in edges_data] + already_source_ids)
     )
-    subgraphs = SUBGRAPH_FIELD_SEP.join(
+    subgraphs = SUBGRAPH_SEP.join(
         set([sg for dp in edges_data for sg in dp["subgraphs"]] + already_subgraphs)
     )
     for need_insert_id in [src_id, tgt_id]:
@@ -236,6 +236,7 @@ async def _merge_edges_then_upsert(
                     "source_id": source_id,
                     "description": description,
                     "entity_type": "UNKNOWN",
+                    "subgraphs": subgraphs,
                 },
             )
     description = await _handle_entity_relation_summary(
@@ -249,7 +250,6 @@ async def _merge_edges_then_upsert(
             description=description,
             keywords=keywords,
             source_id=source_id,
-            subgraphs=subgraphs
         ),
     )
 
@@ -258,7 +258,6 @@ async def _merge_edges_then_upsert(
         tgt_id=tgt_id,
         description=description,
         keywords=keywords,
-        subgraphs=subgraphs,
     )
 
     return edge_data

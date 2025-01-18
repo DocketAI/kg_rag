@@ -43,7 +43,7 @@ def process_in_batches(tx, query, data, batch_size):
 
 def main():
     # Paths
-    xml_file = os.path.join(WORKING_DIR, "graph_chunk_entity_relation.graphml")
+    xml_file = os.path.join(WORKING_DIR, "subgraph_chunk_entity_relation.graphml")
     json_file = os.path.join(WORKING_DIR, "graph_data.json")
 
     # Convert XML to JSON
@@ -87,8 +87,7 @@ def main():
       weight: edge.weight,
       description: edge.description,
       keywords: edge.keywords,
-      source_id: edge.source_id,
-      subgraphs: edge.subgraphs
+      source_id: edge.source_id
     }, target) YIELD rel
     RETURN count(*)
     """

@@ -1,6 +1,7 @@
 import json
 import boto3
 import psycopg2
+from random import randint
 from .base import TextChunkSchema
 from .utils import encode_string_by_tiktoken, merge_content
 from .prompt import AGG_CHUNK_SEP
@@ -95,7 +96,7 @@ def get_chunks(
                             "content": merged_content,
                             "sequence": combined_sequence,
                             "source_id": current_source_id,
-                            "subgraphs": subgraph_sources.get(source, []),
+                            "subgraphs": subgraph_sources.get(source, []) + ['ALL' if randint(0,10) % 2 == 0 else 'PK'],
                         })
                         current_chunk_ids = []
                         current_contents = []
@@ -119,7 +120,7 @@ def get_chunks(
                         "content": merged_content,
                         "sequence": combined_sequence,
                         "source_id": current_source_id,
-                        "subgraphs": subgraph_sources.get(source, []),
+                        "subgraphs": subgraph_sources.get(source, []) + ['ALL' if randint(0,10) % 2 == 0 else 'PK'],
                     })
                     
                     combined_sequence += 1
@@ -140,7 +141,7 @@ def get_chunks(
                 "content": merged_content,
                 "sequence": combined_sequence,
                 "source_id": current_source_id,
-                "subgraphs": subgraph_sources.get(source, []),
+                "subgraphs": subgraph_sources.get(source, []) + ['ALL' if randint(0,10) % 2 == 0 else 'PK'],
             })
             
         return {
