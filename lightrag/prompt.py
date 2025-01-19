@@ -15,9 +15,14 @@ PROMPTS["entity_extraction"] = """-Goal-
 Given {organization}'s (organization) data, identify all entities that match the given entity types and then identify relationships among them. Note that {organization}'s data may also include mentions of other organizations (e.g., partners, clients, competitors in testimonials or customer success stories). These other organizations should also be captured with the entity type "organization."
 Use {language} as the output language.
 
+#############################
+-Known Entities-
+#############################
+{known_entities}
+
 Note:
 1. The entity types below are the primary types of interest, but they are not exhaustive.
-2. If you identify other clearly defined entity types (such as "person," "country," "location," etc.) that do not fit into the list of primary types, you should still capture them and assign an appropriate entity type label
+2. If you identify other clearly defined entity types (such as "location", "concept", etc.) that do not fit into the list of primary types, you should still capture them and assign an appropriate entity type label
 
 -Entity Types and Definitions-
 - organization: Any company/organization (including {organization} itself and any other referenced organizations)
@@ -302,3 +307,7 @@ When handling information with timestamps:
   Format: [KG/VD] Source content
 
 Add sections and commentary to the response as appropriate for the length and format. If the provided information is insufficient to answer the question, clearly state that you don't know or cannot provide an answer in the same language as the user's question."""
+
+PROMPTS["known_entities"] = """Here are some pre known entities that may appear in the text. Use these details to unify them with any mentions in the text. If additional information about these entities is found, merge it into the description. If you encounter new entities not listed here, capture them separately using the same entity_type conventions.
+{known_entities}
+"""

@@ -29,7 +29,7 @@ class UnlimitedSemaphore:
 
 
 ENCODER = None
-
+WORKING_DIR = os.environ["RAG_DIR"]
 logger = logging.getLogger("lightrag")
 
 
@@ -574,3 +574,58 @@ def merge_content(content_list):
         strB = content_list[i]
         strA = merge_texts(strA, strB)
     return strA
+
+def _format_json_to_string(data: Any, indent: int = 0) -> List[str]:
+    """
+    Recursive helper function that returns a list of lines 
+    representing the data structure without braces, using indentation only.
+    """
+    lines = []
+    prefix = " " * indent  # indentation spaces
+
+    if isinstance(data, dict):
+        # For a dictionary, print each key, and if the value is complex,
+        # recurse; if it's simple, show the value inline.
+        for key, value in data.items():
+            if isinstance(value, (dict, list)):
+                lines.append(f"{prefix}{key}:")
+                lines.extend(_format_json_to_string(value, indent + 4))
+            else:
+                lines.append(f"{prefix}{key}: {value}")
+
+    elif isinstance(data, list):
+        # For a list, iterate over items, which may be complex or simple
+        for item in data:
+            if isinstance(item, (dict, list)):
+                lines.append(f"{prefix}-")
+                lines.extend(_format_json_to_string(item, indent + 4))
+            else:
+                lines.append(f"{prefix}- {item}")
+
+    else:
+        # If it's neither dict nor list (i.e., a string, int, float, etc.),
+        # just represent it directly.
+        lines.append(f"{prefix}{data}")
+
+    return lines
+
+def format_json_to_string(data: Any) -> str:
+    """
+    Convert Python data (dict, list, etc.) into a string that has:
+      - No braces ({ or })
+      - Uses indentation to outline structure
+    """
+    lines = _format_json_to_string(data, indent=0)
+    return "\n".join(lines)
+
+def save_or_load_known_entities(entity_type=None, entity_data=None, format=False):
+    save_file = os.path.join(WORKING_DIR, "known_entities.json")
+    data = {}
+    if os.path.exists(save_file):
+        with open(save_file, "r") as f:
+            data = json.load(f)
+    if entity_type and entity_data: 
+        data[entity_type.value] = data.get(entity_type.value, []) + [entity_data]
+        with open(save_file, "w") as f:
+            json.dump(data, f)
+    return format_json_to_string(data) if format else data
