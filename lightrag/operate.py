@@ -726,6 +726,7 @@ async def _get_node_data(
     *[entities_vdb.query(kw, top_k=query_param.top_k // len(keywords)) for kw in keywords]
     )
     results = [r for res in results for r in res]
+    results = sorted(results, key=lambda x: x['distance'].item(), reverse=True)
     # results = await entities_vdb.query(query, top_k=query_param.top_k)
     if not len(results):
         return "", "", ""
@@ -937,6 +938,7 @@ async def _get_edge_data(
     *[relationships_vdb.query(kw, top_k=query_param.top_k // len(keywords)) for kw in keywords]
     )
     results = [r for res in results for r in res]
+    results = sorted(results, key=lambda x: x['distance'].item(), reverse=True)
     # results = await relationships_vdb.query(keywords, top_k=query_param.top_k)
 
     if not len(results):
