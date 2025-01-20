@@ -70,8 +70,6 @@ def get_chunks(
 
         offset = 0
         while offset < total_rows:
-            if offset == 200:
-                break
             query = f"""
                 SELECT chunk_id, content, sequence, source_id, source
                 FROM {chunks_table} WHERE company_id = {company_id}
@@ -96,7 +94,7 @@ def get_chunks(
                             "content": merged_content,
                             "sequence": combined_sequence,
                             "source_id": current_source_id,
-                            "subgraphs": subgraph_sources.get(source, []) + ['ALL' if randint(0,10) % 2 == 0 else 'PK'],
+                            "subgraphs": subgraph_sources.get(source, []) + ['ALL'],
                         })
                         current_chunk_ids = []
                         current_contents = []
@@ -120,7 +118,7 @@ def get_chunks(
                         "content": merged_content,
                         "sequence": combined_sequence,
                         "source_id": current_source_id,
-                        "subgraphs": subgraph_sources.get(source, []) + ['ALL' if randint(0,10) % 2 == 0 else 'PK'],
+                        "subgraphs": subgraph_sources.get(source, []) + ['ALL'],
                     })
                     
                     combined_sequence += 1
@@ -141,7 +139,7 @@ def get_chunks(
                 "content": merged_content,
                 "sequence": combined_sequence,
                 "source_id": current_source_id,
-                "subgraphs": subgraph_sources.get(source, []) + ['ALL' if randint(0,10) % 2 == 0 else 'PK'],
+                "subgraphs": subgraph_sources.get(source, []) + ['ALL'],
             })
             
         return {
