@@ -16,7 +16,7 @@ Use {language} as the output language.
 
 Note:
 1. The entity types below are the primary types of interest, but they are not exhaustive.
-2. If you identify other clearly defined entity types (such as "person," "country," "location," etc.) that do not fit into the list of primary types, you should still capture them and assign an appropriate entity type label
+2. If you identify other clearly defined entity types (such as "person", "location," etc.) that do not fit into the list of primary types, you should still capture them and assign an appropriate entity type label
 
 -Entity Types and Definitions-
 - organization: Any company/organization (including {organization} itself and any other referenced organizations)
@@ -154,14 +154,16 @@ Add sections and commentary to the response as appropriate for the length and fo
 
 PROMPTS["keywords_extraction"] = """---Role---
 
-You are a helpful assistant tasked with identifying both high-level and low-level keywords in the user's query.
+You are a helpful assistant tasked with identifying both high-level and low-level keywords in the user's query. You also have to analyze the query and decide which of the extracted high-level and low-level keywords are relevant and return only those keywords. 
 
 ---Goal---
+Given the query, list both high-level and low-level keywords. High-level keywords focus on overarching concepts or themes, while low-level keywords focus on specific entities, details, or concrete terms. Please ensure that you have filtered for only the highly relevant High Level and Low level keywords only.
 
-Given the query, list both high-level and low-level keywords. High-level keywords focus on overarching concepts or themes, while low-level keywords focus on specific entities, details, or concrete terms.
+----Instructions----
+1. Evaluate the query to understand its intent and scope and extract high level and low level keywords.
+2. Filter the provided high-level and low-level keywords to include only those that are highly relevant to the query.
 
----Instructions---
-
+### Output Format:
 - Output the keywords in JSON format.
 - The JSON should have two keys:
   - "high_level_keywords" for overarching concepts or themes.
@@ -185,34 +187,58 @@ Output:
 PROMPTS["keywords_extraction_examples"] = [
     """Example 1:
 
-Query: "How does international trade influence global economic stability?"
+Query: "In Docket, does RFP and QnA have different data pipelines?"
 ################
 Output:
 {
-  "high_level_keywords": ["International trade", "Global economic stability", "Economic impact"],
-  "low_level_keywords": ["Trade agreements", "Tariffs", "Currency exchange", "Imports", "Exports"]
+"high_level_keywords": ["Docket", "Data pipelines", "RFP", "QnA"],
+"low_level_keywords": ["Pipeline architecture", "RFP processes", "QnA processes", "Data segregation"]
 }
-#############################""",
-    """Example 2:
+################
 
-Query: "What are the environmental consequences of deforestation on biodiversity?"
-################
-Output:
-{
-  "high_level_keywords": ["Environmental consequences", "Deforestation", "Biodiversity loss"],
-  "low_level_keywords": ["Species extinction", "Habitat destruction", "Carbon emissions", "Rainforest", "Ecosystem"]
-}
-#############################""",
-    """Example 3:
+Example 2:
 
-Query: "What is the role of education in reducing poverty?"
+Query: "What are Slack's data retention policies compared to Docket's 90-day message retention?"
 ################
 Output:
 {
-  "high_level_keywords": ["Education", "Poverty reduction", "Socioeconomic development"],
-  "low_level_keywords": ["School access", "Literacy rates", "Job training", "Income inequality"]
+"high_level_keywords": ["Slack", "Docket", "Data retention policies"],
+"low_level_keywords": ["90-day retention", "Message deletion", "Data storage compliance", "Retention"]
 }
-#############################""",
+################
+
+Example 3:
+
+Query: "How should I respond to a customer that's concerned about keeping their data safe?"
+################
+Output:
+{
+"high_level_keywords": ["Customer concerns", "Data safety", "Security measures"],
+"low_level_keywords": ["Encryption", "Data privacy", "Compliance standards", "Customer assurance"]
+}
+################
+
+Example 4:
+
+Query: "How can a customer be certain Docket doesn't use our data to train? Any proof vs just contractual agreement?"
+################
+Output:
+{
+"high_level_keywords": ["Docket", "Data usage", "Customer trust", "Training models"],
+"low_level_keywords": ["Proof of compliance", "Contractual guarantees", "Data integrity", "Privacy assurance"]
+}
+################
+
+Example 5:
+
+Query: "How does Docket work if it doesn't train on customer data?"
+################
+Output:
+{
+"high_level_keywords": ["Docket", "Training models", "Customer data"],
+"low_level_keywords": ["Alternative models", "Data-independent operations", "Privacy"]
+}
+################""",
 ]
 
 PROMPTS["naive_rag_response"] = """---Role---
@@ -301,3 +327,32 @@ When handling information with timestamps:
   Format: [KG/VD] Source content
 
 Add sections and commentary to the response as appropriate for the length and format. If the provided information is insufficient to answer the question, clearly state that you don't know or cannot provide an answer in the same language as the user's question."""
+
+PROMPTS["hl_ll_keywords_selection"] = """You are an intelligent system designed to determine the relevance of keyword sets for retrieval purposes. Your task is to analyze a query and decide which high-level and low-level keywords are relevant.  
+
+### Instructions:
+1. Evaluate the query to understand its intent and scope.
+2. Filter the provided high-level and low-level keywords to include only those directly relevant to the query.
+3. Return the filtered keywords in the format `[ll_keywords, hl_keywords]`.
+
+### Input:
+- Query: {query}
+- High-level Keywords: {hl_keywords}
+- Low-level Keywords: {ll_keywords}
+
+### Output:
+A JSON object with the following structure:
+- query: A string containing the original query.
+- relevant_keywords: An object with two lists:
+  1. high_level: A list containing only the relevant high-level keywords.
+  2. low_level: A list containing only the relevant low-level keywords.
+
+### Example Output:
+{
+  "query": "<Query>",
+  "relevant_keywords": {
+    "high_level": ["<Relevant High-level Keywords>"],
+    "low_level": ["<Relevant Low-level Keywords>"],
+  }
+}
+"""
