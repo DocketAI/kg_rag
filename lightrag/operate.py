@@ -542,6 +542,10 @@ async def kg_query(
         print(f"JSON parsing error: {e} {result}")
         return PROMPTS["fail_response"]
 
+    # kw_selection_prompt_temp = PROMPTS["hl_ll_keywords_selection"]
+    # kw_selection_prompt = kw_selection_prompt_temp.format(query=query, hl_keywords=str(hl_keywords), ll_keywords=str(ll_keywords), language=language)
+    # result = await use_model_func(kw_selection_prompt, keyword_extraction=True)
+
     # Handdle keywords missing
     if hl_keywords == [] and ll_keywords == []:
         logger.warning("low_level_keywords and high_level_keywords is empty")

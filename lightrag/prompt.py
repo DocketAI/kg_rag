@@ -161,14 +161,16 @@ Add sections and commentary to the response as appropriate for the length and fo
 
 PROMPTS["keywords_extraction"] = """---Role---
 
-You are a helpful assistant tasked with identifying both high-level and low-level keywords in the user's query.
+You are a helpful assistant tasked with identifying both high-level and low-level keywords in the user's query. You also have to analyze the query and decide which of the extracted high-level and low-level keywords are relevant and return only those keywords. 
 
 ---Goal---
+Given the query, list both high-level and low-level keywords. High-level keywords focus on overarching concepts or themes, while low-level keywords focus on specific entities, details, or concrete terms. Please ensure that you have filtered for only the highly relevant High Level and Low level keywords only.
 
-Given the query, list both high-level and low-level keywords. High-level keywords focus on overarching concepts or themes, while low-level keywords focus on specific entities, details, or concrete terms.
+----Instructions----
+1. Evaluate the query to understand its intent and scope and extract high level and low level keywords.
+2. Filter the provided high-level and low-level keywords to include only those that are highly relevant to the query.
 
----Instructions---
-
+### Output Format:
 - Output the keywords in JSON format.
 - The JSON should have two keys:
   - "high_level_keywords" for overarching concepts or themes.
@@ -192,34 +194,58 @@ Output:
 PROMPTS["keywords_extraction_examples"] = [
     """Example 1:
 
-Query: "How does international trade influence global economic stability?"
+Query: "In Docket, does RFP and QnA have different data pipelines?"
 ################
 Output:
 {
-  "high_level_keywords": ["International trade", "Global economic stability", "Economic impact"],
-  "low_level_keywords": ["Trade agreements", "Tariffs", "Currency exchange", "Imports", "Exports"]
+"high_level_keywords": ["Docket", "Data pipelines", "RFP", "QnA"],
+"low_level_keywords": ["Pipeline architecture", "RFP processes", "QnA processes", "Data segregation"]
 }
-#############################""",
-    """Example 2:
+################
 
-Query: "What are the environmental consequences of deforestation on biodiversity?"
-################
-Output:
-{
-  "high_level_keywords": ["Environmental consequences", "Deforestation", "Biodiversity loss"],
-  "low_level_keywords": ["Species extinction", "Habitat destruction", "Carbon emissions", "Rainforest", "Ecosystem"]
-}
-#############################""",
-    """Example 3:
+Example 2:
 
-Query: "What is the role of education in reducing poverty?"
+Query: "What are Slack's data retention policies compared to Docket's 90-day message retention?"
 ################
 Output:
 {
-  "high_level_keywords": ["Education", "Poverty reduction", "Socioeconomic development"],
-  "low_level_keywords": ["School access", "Literacy rates", "Job training", "Income inequality"]
+"high_level_keywords": ["Slack", "Docket", "Data retention policies"],
+"low_level_keywords": ["90-day retention", "Message deletion", "Data storage compliance", "Retention"]
 }
-#############################""",
+################
+
+Example 3:
+
+Query: "How should I respond to a customer that's concerned about keeping their data safe?"
+################
+Output:
+{
+"high_level_keywords": ["Customer concerns", "Data safety", "Security measures"],
+"low_level_keywords": ["Encryption", "Data privacy", "Compliance standards", "Customer assurance"]
+}
+################
+
+Example 4:
+
+Query: "How can a customer be certain Docket doesn't use our data to train? Any proof vs just contractual agreement?"
+################
+Output:
+{
+"high_level_keywords": ["Docket", "Data usage", "Customer trust", "Training models"],
+"low_level_keywords": ["Proof of compliance", "Contractual guarantees", "Data integrity", "Privacy assurance"]
+}
+################
+
+Example 5:
+
+Query: "How does Docket work if it doesn't train on customer data?"
+################
+Output:
+{
+"high_level_keywords": ["Docket", "Training models", "Customer data"],
+"low_level_keywords": ["Alternative models", "Data-independent operations", "Privacy"]
+}
+################""",
 ]
 
 PROMPTS["naive_rag_response"] = """---Role---
@@ -306,5 +332,5 @@ When handling information with timestamps:
 - Use clear and descriptive section titles that reflect the content
 - List up to 5 most important reference sources at the end under "References", clearly indicating whether each source is from Knowledge Graph (KG) or Vector Data (VD)
   Format: [KG/VD] Source content
-
+  
 Add sections and commentary to the response as appropriate for the length and format. If the provided information is insufficient to answer the question, clearly state that you don't know or cannot provide an answer in the same language as the user's question."""
