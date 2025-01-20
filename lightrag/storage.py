@@ -14,6 +14,7 @@ from .utils import (
     load_json,
     write_json,
     compute_mdhash_id,
+    split_string_by_multi_markers,
 )
 
 from .base import (
@@ -24,7 +25,8 @@ from .base import (
     DocProcessingStatus,
     DocStatusStorage,
 )
-
+from .prompt import SUBGRAPH_SEP
+from .utils import save_or_load_known_entities
 
 @dataclass
 class JsonKVStorage(BaseKVStorage):
@@ -300,6 +302,9 @@ class NetworkXStorage(BaseGraphStorage):
         self._graphml_xml_file = os.path.join(
             self.global_config["working_dir"], f"graph_{self.namespace}.graphml"
         )
+        self._graphml_xml_sg_file = os.path.join(
+            self.global_config["working_dir"], f"subgraph_{self.namespace}.graphml"
+        )
         preloaded_graph = NetworkXStorage.load_nx_graph(self._graphml_xml_file)
         if preloaded_graph is not None:
             logger.info(
@@ -312,6 +317,24 @@ class NetworkXStorage(BaseGraphStorage):
 
     async def index_done_callback(self):
         NetworkXStorage.write_nx_graph(self._graph, self._graphml_xml_file)
+        await self.post_process()
+        NetworkXStorage.write_nx_graph(NetworkXStorage.get_subgraph(self._graph, subgraph='PK'), self._graphml_xml_sg_file)
+        
+
+    async def post_process(self):
+        print("Updating sub graph values for known entities")
+        known_entities = save_or_load_known_entities()
+        for _, ent_list in known_entities.items():
+            for ent_data in ent_list:
+                ent_name = ent_data["entity_name"].upper()
+                if await self.has_node(ent_name):
+                    node_data = await self.get_node(ent_name)
+                    subgraphs = split_string_by_multi_markers(node_data.get("subgraphs"), [SUBGRAPH_SEP])
+                    if "PK" not in subgraphs:
+                        subgraphs.append("PK")
+                        node_data["subgraphs"] = SUBGRAPH_SEP.join(subgraphs)
+                        await self.upsert_node(ent_name, node_data)
+
 
     async def has_node(self, node_id: str) -> bool:
         return self._graph.has_node(node_id)
@@ -394,6 +417,20 @@ class NetworkXStorage(BaseGraphStorage):
         for source, target in edges:
             if self._graph.has_edge(source, target):
                 self._graph.remove_edge(source, target)
+
+
+    def get_subgraph(graph, subgraph: str) -> nx.Graph:
+        """
+        Return a subgraph containing only the nodes (and related edges)
+        whose node attribute 'subgraphs' matches the given subgraph.
+        """
+        matching_nodes = [
+            n for n, data in graph.nodes(data=True) 
+            if subgraph in split_string_by_multi_markers(data.get("subgraphs"), [SUBGRAPH_SEP])
+        ]
+        return graph.subgraph(matching_nodes)
+    
+
 
 
 @dataclass

@@ -3,10 +3,11 @@ from pydantic import BaseModel
 import os
 from lightrag import LightRAG, QueryParam
 from lightrag.llm import openai_complete_if_cache, openai_embedding
-from lightrag.utils import EmbeddingFunc
+from lightrag.utils import EmbeddingFunc, save_or_load_known_entities
 from dotenv import load_dotenv
 import numpy as np
-from typing import Optional
+from typing import Optional, Dict, Any
+from enum import Enum
 import asyncio
 import nest_asyncio
 
@@ -95,6 +96,44 @@ class Response(BaseModel):
     message: Optional[str] = None
 
 
+class EntityType(str, Enum):
+    PRODUCT_LINE = "product_line"
+    PRODUCT_SKU = "product_sku"
+    FEATURE = "feature"
+    SECURITY = "security"
+    SME = "sme"
+    USE_CASE = "use_case"
+
+
+class ProductLine(BaseModel):
+    entity_name: str
+    abbreviations: Optional[list[str]] = None
+    synonyms: Optional[list[str]] = []
+    partial_description: Optional[str] = None
+
+
+class Feature(BaseModel):
+    product_line: str
+    entity_name: str
+    partial_description: Optional[str] = None
+    abbreviations: Optional[list[str]] = None
+    synonyms: Optional[list[str]] = None
+
+
+class Security(BaseModel):
+    certification_name: str
+    entity_name: str
+    partial_description: Optional[str]
+    abbreviations: Optional[list[str]]
+    synonyms: Optional[list[str]]
+
+
+model_mapping = {
+    EntityType.PRODUCT_LINE: ProductLine,
+    EntityType.FEATURE: Feature,
+    EntityType.SECURITY: Security
+}
+
 # API routes
 
 
@@ -155,10 +194,35 @@ async def insert_chunks(company_id: int):
 
         return Response(
             status="success",
-            message=f"Chunks from inserted successfully",
+            message=f"Chunks inserted successfully",
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/add_known_entity/{entity_type}")
+async def add_known_entity(entity_type: EntityType, entity_data: Dict[str, Any]):
+    """
+    Endpoint to add an entity of a specific type (e.g., product_line, feature).
+    - entity_type: path parameter, must be one of the EntityType enum values
+    - entity_data: JSON body, which we'll parse with the correct Pydantic model
+    """
+    model_class = model_mapping.get(entity_type)
+    if not model_class:
+        raise HTTPException(status_code=400, detail="Invalid or unsupported entity type")
+
+    try:
+        entity_instance = model_class(**entity_data)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    save_or_load_known_entities(
+        entity_type=entity_type, 
+        entity_data=entity_instance.model_dump()
+    )
+    return {
+        "message": f"Entity of type '{entity_type.value}' added successfully.",
+    }
+
+
 
 @app.get("/health")
 async def health_check():

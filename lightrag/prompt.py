@@ -1,5 +1,6 @@
 GRAPH_FIELD_SEP = "<SEP>"
 AGG_CHUNK_SEP = "<CID>"
+SUBGRAPH_SEP = "<SG>"
 PROMPTS = {}
 
 PROMPTS["ORGANIZATION"] = "Zoominfo"
@@ -14,9 +15,15 @@ PROMPTS["entity_extraction"] = """-Goal-
 Given {organization}'s (organization) data, identify all entities that match the given entity types and then identify relationships among them. Note that {organization}'s data may also include mentions of other organizations (e.g., partners, clients, competitors in testimonials or customer success stories). These other organizations should also be captured with the entity type "organization."
 Use {language} as the output language.
 
+Here are some pre known entities of {organization} that may appear in the text. Use these details to unify them with any mentions in the text. If additional information about these entities is found, merge it into the description. If you encounter new entities not listed here, capture them separately using the same entity_type conventions.
+#############################
+-Known Entities-
+#############################
+{known_entities}
+
 Note:
 1. The entity types below are the primary types of interest, but they are not exhaustive.
-2. If you identify other clearly defined entity types (such as "person", "location," etc.) that do not fit into the list of primary types, you should still capture them and assign an appropriate entity type label
+2. If you identify other clearly defined entity types (such as "location", "concept", etc.) that do not fit into the list of primary types, you should still capture them and assign an appropriate entity type label
 
 -Entity Types and Definitions-
 - organization: Any company/organization (including {organization} itself and any other referenced organizations)
@@ -325,34 +332,5 @@ When handling information with timestamps:
 - Use clear and descriptive section titles that reflect the content
 - List up to 5 most important reference sources at the end under "References", clearly indicating whether each source is from Knowledge Graph (KG) or Vector Data (VD)
   Format: [KG/VD] Source content
-
+  
 Add sections and commentary to the response as appropriate for the length and format. If the provided information is insufficient to answer the question, clearly state that you don't know or cannot provide an answer in the same language as the user's question."""
-
-PROMPTS["hl_ll_keywords_selection"] = """You are an intelligent system designed to determine the relevance of keyword sets for retrieval purposes. Your task is to analyze a query and decide which high-level and low-level keywords are relevant.  
-
-### Instructions:
-1. Evaluate the query to understand its intent and scope.
-2. Filter the provided high-level and low-level keywords to include only those directly relevant to the query.
-3. Return the filtered keywords in the format `[ll_keywords, hl_keywords]`.
-
-### Input:
-- Query: {query}
-- High-level Keywords: {hl_keywords}
-- Low-level Keywords: {ll_keywords}
-
-### Output:
-A JSON object with the following structure:
-- query: A string containing the original query.
-- relevant_keywords: An object with two lists:
-  1. high_level: A list containing only the relevant high-level keywords.
-  2. low_level: A list containing only the relevant low-level keywords.
-
-### Example Output:
-{
-  "query": "<Query>",
-  "relevant_keywords": {
-    "high_level": ["<Relevant High-level Keywords>"],
-    "low_level": ["<Relevant Low-level Keywords>"],
-  }
-}
-"""

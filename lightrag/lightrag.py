@@ -25,6 +25,7 @@ from .utils import (
     compute_mdhash_id,
     limit_async_func_call,
     convert_response_to_json,
+    save_or_load_known_entities,
     logger,
     set_logger,
 )
@@ -142,7 +143,7 @@ class LightRAG:
     # text chunking
     chunk_token_size: int = 1200
     chunk_overlap_token_size: int = 100
-    tiktoken_model_name: str = "gpt-4o-mini"
+    tiktoken_model_name: str = "gpt-4o"
 
     # entity extraction
     entity_extract_max_gleaning: int = 1
@@ -463,8 +464,10 @@ class LightRAG:
             min_tokens=1200,
             company_id=company_id
         )
+        known_entities = save_or_load_known_entities(format=True)
         maybe_new_kg = await extract_entities(
             chunks,
+            known_entities,
             knowledge_graph_inst=self.chunk_entity_relation_graph,
             entity_vdb=self.entities_vdb,
             relationships_vdb=self.relationships_vdb,
@@ -477,6 +480,7 @@ class LightRAG:
             )
 
         self.chunk_entity_relation_graph = maybe_new_kg
+        await self.text_chunks.upsert(chunks)
         await self._insert_done()
 
     async def _insert_done(self):

@@ -29,7 +29,7 @@ from .base import (
     TextChunkSchema,
     QueryParam,
 )
-from .prompt import GRAPH_FIELD_SEP, PROMPTS
+from .prompt import GRAPH_FIELD_SEP, SUBGRAPH_SEP, PROMPTS
 import time
 
 
@@ -142,6 +142,7 @@ async def _merge_nodes_then_upsert(
     already_entity_types = []
     already_source_ids = []
     already_description = []
+    already_subgraphs = []
 
     already_node = await knowledge_graph_inst.get_node(entity_name)
     if already_node is not None:
@@ -150,6 +151,9 @@ async def _merge_nodes_then_upsert(
             split_string_by_multi_markers(already_node["source_id"], [GRAPH_FIELD_SEP])
         )
         already_description.append(already_node["description"])
+        already_subgraphs.extend(
+            split_string_by_multi_markers(already_node["subgraphs"], [SUBGRAPH_SEP])
+        )
 
     entity_type = sorted(
         Counter(
@@ -167,10 +171,14 @@ async def _merge_nodes_then_upsert(
     description = await _handle_entity_relation_summary(
         entity_name, description, global_config
     )
+    subgraphs = SUBGRAPH_SEP.join(
+        set([sg for dp in nodes_data for sg in dp["subgraphs"]] + already_subgraphs)
+    )
     node_data = dict(
         entity_type=entity_type,
         description=description,
         source_id=source_id,
+        subgraphs=subgraphs
     )
     await knowledge_graph_inst.upsert_node(
         entity_name,
@@ -191,6 +199,7 @@ async def _merge_edges_then_upsert(
     already_source_ids = []
     already_description = []
     already_keywords = []
+    already_subgraphs = []
 
     if await knowledge_graph_inst.has_edge(src_id, tgt_id):
         already_edge = await knowledge_graph_inst.get_edge(src_id, tgt_id)
@@ -201,6 +210,9 @@ async def _merge_edges_then_upsert(
         already_description.append(already_edge["description"])
         already_keywords.extend(
             split_string_by_multi_markers(already_edge["keywords"], [GRAPH_FIELD_SEP])
+        )
+        already_subgraphs.extend(
+            split_string_by_multi_markers(already_edge["subgraphs"], [SUBGRAPH_SEP])
         )
 
     weight = sum([dp["weight"] for dp in edges_data] + already_weights)
@@ -213,6 +225,9 @@ async def _merge_edges_then_upsert(
     source_id = GRAPH_FIELD_SEP.join(
         set([dp["source_id"] for dp in edges_data] + already_source_ids)
     )
+    subgraphs = SUBGRAPH_SEP.join(
+        set([sg for dp in edges_data for sg in dp["subgraphs"]] + already_subgraphs)
+    )
     for need_insert_id in [src_id, tgt_id]:
         if not (await knowledge_graph_inst.has_node(need_insert_id)):
             await knowledge_graph_inst.upsert_node(
@@ -221,6 +236,7 @@ async def _merge_edges_then_upsert(
                     "source_id": source_id,
                     "description": description,
                     "entity_type": "UNKNOWN",
+                    "subgraphs": subgraphs,
                 },
             )
     description = await _handle_entity_relation_summary(
@@ -249,6 +265,7 @@ async def _merge_edges_then_upsert(
 
 async def extract_entities(
     chunks: dict[str, TextChunkSchema],
+    known_entities: dict[str, any],
     knowledge_graph_inst: BaseGraphStorage,
     entity_vdb: BaseVectorStorage,
     relationships_vdb: BaseVectorStorage,
@@ -291,6 +308,7 @@ async def extract_entities(
         completion_delimiter=PROMPTS["DEFAULT_COMPLETION_DELIMITER"],
         entity_types=",".join(entity_types),
         examples=examples,
+        known_entities=known_entities,
         language=language,
         organization=organization,
     )
@@ -350,6 +368,7 @@ async def extract_entities(
                 record_attributes, chunk_key
             )
             if if_entities is not None:
+                if_entities["subgraphs"] = chunk_dp["subgraphs"]
                 maybe_nodes[if_entities["entity_name"]].append(if_entities)
                 continue
 
@@ -357,6 +376,7 @@ async def extract_entities(
                 record_attributes, chunk_key
             )
             if if_relation is not None:
+                if_relation["subgraphs"] = chunk_dp["subgraphs"]
                 maybe_edges[(if_relation["src_id"], if_relation["tgt_id"])].append(
                     if_relation
                 )
@@ -435,7 +455,7 @@ async def extract_entities(
     if entity_vdb is not None:
         data_for_vdb = {
             compute_mdhash_id(dp["entity_name"], prefix="ent-"): {
-                # "content": dp["entity_name"] + dp["description"],
+                # "content": dp["entity_name"] + ": " + dp["description"],
                 "content": dp["entity_name"],
                 "entity_name": dp["entity_name"],
             }
@@ -541,6 +561,9 @@ async def kg_query(
     # else:
     #     hl_keywords = ", ".join(hl_keywords)
 
+    # also using query to find matching entities
+    ll_keywords.insert(0, query)
+    hl_keywords.insert(0, query)
     # Build context
     keywords = [ll_keywords, hl_keywords]
     context = await _build_query_context(
@@ -595,7 +618,7 @@ async def kg_query(
 
 
 async def _build_query_context(
-    query: list,
+    keywords: list,
     knowledge_graph_inst: BaseGraphStorage,
     entities_vdb: BaseVectorStorage,
     relationships_vdb: BaseVectorStorage,
@@ -605,10 +628,11 @@ async def _build_query_context(
     # ll_entities_context, ll_relations_context, ll_text_units_context = "", "", ""
     # hl_entities_context, hl_relations_context, hl_text_units_context = "", "", ""
 
-    ll_kewwords, hl_keywrds = query[0], query[1]
+    ll_keywords, hl_keywords = keywords[0], keywords[1]
+
     if query_param.mode in ["local", "hybrid"]:
         # if ll_kewwords == "":
-        if len(ll_kewwords) == 0:
+        if len(ll_keywords) == 0:
             ll_entities_context, ll_relations_context, ll_text_units_context = (
                 "",
                 "",
@@ -624,7 +648,7 @@ async def _build_query_context(
                 ll_relations_context, 
                 ll_text_units_context,
             ) = await _get_node_data(
-                ll_kewwords,
+                ll_keywords,
                 knowledge_graph_inst,
                 entities_vdb,
                 text_chunks_db,
@@ -632,7 +656,7 @@ async def _build_query_context(
             )
     if query_param.mode in ["global", "hybrid"]:
         # if hl_keywrds == "":
-        if len(hl_keywrds) == 0:
+        if len(hl_keywords) == 0:
             hl_entities_context, hl_relations_context, hl_text_units_context = (
                 "",
                 "",
@@ -648,7 +672,7 @@ async def _build_query_context(
                 hl_relations_context,
                 hl_text_units_context,
             ) = await _get_edge_data(
-                hl_keywrds,
+                hl_keywords,
                 knowledge_graph_inst,
                 relationships_vdb,
                 text_chunks_db,
@@ -694,9 +718,8 @@ async def _build_query_context(
 ```
 """
 
-
 async def _get_node_data(
-    query,
+    keywords,
     knowledge_graph_inst: BaseGraphStorage,
     entities_vdb: BaseVectorStorage,
     text_chunks_db: BaseKVStorage[TextChunkSchema],
@@ -704,9 +727,10 @@ async def _get_node_data(
 ):
     # get similar entities
     results = await asyncio.gather(
-    *[entities_vdb.query(query_kw, top_k=query_param.top_k // len(query)) for query_kw in query]
+    *[entities_vdb.query(kw, top_k=query_param.top_k // len(keywords)) for kw in keywords]
     )
     results = [r for res in results for r in res]
+    results = sorted(results, key=lambda x: x['distance'].item(), reverse=True)
     # results = await entities_vdb.query(query, top_k=query_param.top_k)
     if not len(results):
         return "", "", ""
@@ -913,10 +937,12 @@ async def _get_edge_data(
     text_chunks_db: BaseKVStorage[TextChunkSchema],
     query_param: QueryParam,
 ):
+    
     results = await asyncio.gather(
-    *[relationships_vdb.query(query_kw, top_k=query_param.top_k // len(keywords)) for query_kw in keywords]
+    *[relationships_vdb.query(kw, top_k=query_param.top_k // len(keywords)) for kw in keywords]
     )
     results = [r for res in results for r in res]
+    results = sorted(results, key=lambda x: x['distance'].item(), reverse=True)
     # results = await relationships_vdb.query(keywords, top_k=query_param.top_k)
 
     if not len(results):

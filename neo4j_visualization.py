@@ -43,7 +43,7 @@ def process_in_batches(tx, query, data, batch_size):
 
 def main():
     # Paths
-    xml_file = os.path.join(WORKING_DIR, "graph_chunk_entity_relation.graphml")
+    xml_file = os.path.join(WORKING_DIR, "subgraph_chunk_entity_relation.graphml")
     json_file = os.path.join(WORKING_DIR, "graph_data.json")
 
     # Convert XML to JSON
@@ -62,7 +62,8 @@ def main():
     SET e.entity_type = node.entity_type,
         e.description = node.description,
         e.source_id = node.source_id,
-        e.displayName = node.id
+        e.displayName = node.id,
+        e.subgraphs = node.subgraphs
     REMOVE e:Entity
     WITH e, node
     CALL apoc.create.addLabels(e, [node.entity_type]) YIELD node AS labeledNode
