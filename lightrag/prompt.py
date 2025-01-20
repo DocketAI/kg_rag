@@ -161,14 +161,13 @@ Add sections and commentary to the response as appropriate for the length and fo
 
 PROMPTS["keywords_extraction"] = """---Role---
 
-You are a helpful assistant tasked with identifying both high-level and low-level keywords in the user's query. You also have to analyze the query and decide which of the extracted high-level and low-level keywords are relevant and return only those keywords. 
+You are a helpful assistant tasked with identifying both high-level and low-level keywords in the user's query.
 
 ---Goal---
-Given the query, list both high-level and low-level keywords. High-level keywords focus on overarching concepts or themes, while low-level keywords focus on specific entities, details, or concrete terms. Please ensure that you have filtered for only the highly relevant High Level and Low level keywords only.
+Given the query, list both high-level and low-level keywords. High-level keywords focus on overarching concepts or themes, while low-level keywords focus on specific entities, details, or concrete terms.
 
 ----Instructions----
-1. Evaluate the query to understand its intent and scope and extract high level and low level keywords.
-2. Filter the provided high-level and low-level keywords to include only those that are highly relevant to the query.
+Evaluate the query to understand its intent and scope and extract high level and low level keywords that are highly relevant to the query.
 
 ### Output Format:
 - Output the keywords in JSON format.
