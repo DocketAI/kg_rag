@@ -97,7 +97,6 @@ class Response(BaseModel):
 
 
 class EntityType(str, Enum):
-    ORGANIZATION = "organization"
     PRODUCT_LINE = "product_line"
     PRODUCT_SKU = "product_sku"
     FEATURE = "feature"
@@ -108,8 +107,7 @@ class EntityType(str, Enum):
 
 class ProductLine(BaseModel):
     entity_name: str
-    organization: str
-    abbreviation: Optional[str] = None
+    abbreviations: Optional[list[str]] = None
     synonyms: Optional[list[str]] = []
     partial_description: Optional[str] = None
 
@@ -118,7 +116,7 @@ class Feature(BaseModel):
     product_line: str
     entity_name: str
     partial_description: Optional[str] = None
-    abbreviation: Optional[str] = None
+    abbreviations: Optional[list[str]] = None
     synonyms: Optional[list[str]] = None
 
 
@@ -126,7 +124,7 @@ class Security(BaseModel):
     certification_name: str
     entity_name: str
     partial_description: Optional[str]
-    abbreviation: Optional[str]
+    abbreviations: Optional[list[str]]
     synonyms: Optional[list[str]]
 
 

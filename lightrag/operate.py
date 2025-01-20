@@ -308,7 +308,7 @@ async def extract_entities(
         completion_delimiter=PROMPTS["DEFAULT_COMPLETION_DELIMITER"],
         entity_types=",".join(entity_types),
         examples=examples,
-        known_entities=PROMPTS["known_entities"].format(known_entities=known_entities),
+        known_entities=known_entities,
         language=language,
         organization=organization,
     )
