@@ -334,8 +334,8 @@ class LightRAG:
             for doc_id in docs
         }
 
-        _add_doc_keys = await self.doc_status.filter_keys(list(new_docs.keys()))
-        new_docs = {k: v for k, v in new_docs.items() if k in _add_doc_keys}
+        _add_doc_keys = await self.doc_status.filter_keys(list(map(str, new_docs.keys())))
+        new_docs = {k: v for k, v in new_docs.items() if k in set(map(int, _add_doc_keys))}
 
         if not new_docs:
             logger.info("All documents have been processed or are duplicates")
