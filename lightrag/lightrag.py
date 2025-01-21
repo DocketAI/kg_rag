@@ -464,9 +464,31 @@ class LightRAG:
             min_tokens=1200,
             company_id=company_id
         )
+        # filter out chunks that are already processed
+        new_chunks_status = {
+            chk_id: {
+                "status": DocStatus.PENDING,
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
+            }
+            for chk_id in chunks
+        }
+        _add_chunk_keys = await self.doc_status.filter_keys(list(new_chunks_status.keys()))
+
+        chunks = {k: v for k, v in chunks.items() if k in _add_chunk_keys}
+        new_chunks_status = {k: v for k, v in new_chunks_status.items() if k in _add_chunk_keys}
+
+        if not new_chunks_status:
+            logger.info("All documents have been processed or are duplicates")
+            return
+        
+        logger.info(f"Processing {len(new_chunks_status)} new unique chunks")
+
         known_entities = save_or_load_known_entities(format=True)
         maybe_new_kg = await extract_entities(
             chunks,
+            new_chunks_status,
+            self.doc_status,
             known_entities,
             knowledge_graph_inst=self.chunk_entity_relation_graph,
             entity_vdb=self.entities_vdb,
@@ -487,6 +509,7 @@ class LightRAG:
         tasks = []
         for storage_inst in [
             self.full_docs,
+            self.doc_status,
             self.text_chunks,
             self.llm_response_cache,
             self.entities_vdb,
