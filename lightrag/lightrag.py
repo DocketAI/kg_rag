@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import partial
 from typing import Type, cast, Dict
-from .chunks import get_chunks
+from .chunks import get_docs, get_chunks
 
 from .llm import (
     gpt_4o_mini_complete,
@@ -313,40 +313,27 @@ class LightRAG:
             "JsonDocStatusStorage": JsonDocStatusStorage,
         }
 
-    def insert(self, string_or_strings):
+    def insert(self, company_id):
         loop = always_get_an_event_loop()
-        return loop.run_until_complete(self.ainsert(string_or_strings))
-    
-    def insert_chunks(self, company_id):
-        loop = always_get_an_event_loop()
-        return loop.run_until_complete(self.ainsert_chunks(company_id))
+        return loop.run_until_complete(self.ainsert(company_id))
 
-    async def ainsert(self, string_or_strings):
+    async def ainsert(self, company_id):
         """Insert documents with checkpoint support
 
         Args:
-            string_or_strings: Single document string or list of document strings
+            company_id: company id
         """
-        if isinstance(string_or_strings, str):
-            string_or_strings = [string_or_strings]
+        docs = await get_docs(company_id, self.addon_params.get("env"))
 
-        # 1. Remove duplicate contents from the list
-        unique_contents = list(set(doc.strip() for doc in string_or_strings))
-
-        # 2. Generate document IDs and initial status
         new_docs = {
-            compute_mdhash_id(content, prefix="doc-"): {
-                "content": content,
-                "content_summary": self._get_content_summary(content),
-                "content_length": len(content),
+            doc_id: {
                 "status": DocStatus.PENDING,
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat(),
             }
-            for content in unique_contents
+            for doc_id in docs
         }
 
-        # 3. Filter out already processed documents
         _add_doc_keys = await self.doc_status.filter_keys(list(new_docs.keys()))
         new_docs = {k: v for k, v in new_docs.items() if k in _add_doc_keys}
 
@@ -355,6 +342,7 @@ class LightRAG:
             return
 
         logger.info(f"Processing {len(new_docs)} new unique documents")
+        known_entities = save_or_load_known_entities(format=True)
 
         # Process documents in batches
         batch_size = self.addon_params.get("insert_batch_size", 10)
@@ -367,8 +355,6 @@ class LightRAG:
                 try:
                     # Update status to processing
                     doc_status = {
-                        "content_summary": doc["content_summary"],
-                        "content_length": doc["content_length"],
                         "status": DocStatus.PROCESSING,
                         "created_at": doc["created_at"],
                         "updated_at": datetime.now().isoformat(),
@@ -376,18 +362,7 @@ class LightRAG:
                     await self.doc_status.upsert({doc_id: doc_status})
 
                     # Generate chunks from document
-                    chunks = {
-                        compute_mdhash_id(dp["content"], prefix="chunk-"): {
-                            **dp,
-                            "full_doc_id": doc_id,
-                        }
-                        for dp in chunking_by_token_size(
-                            doc["content"],
-                            overlap_token_size=self.chunk_overlap_token_size,
-                            max_token_size=self.chunk_token_size,
-                            tiktoken_model=self.tiktoken_model_name,
-                        )
-                    }
+                    chunks = await get_chunks(doc_id, self.addon_params.get("min_chunk_tokens", 1200), company_id, self.addon_params.get("env"))
 
                     # Update status with chunks information
                     doc_status.update(
@@ -400,11 +375,12 @@ class LightRAG:
 
                     try:
                         # Store chunks in vector database
-                        await self.chunks_vdb.upsert(chunks)
+                        # await self.chunks_vdb.upsert(chunks)
 
                         # Extract and store entities and relationships
                         maybe_new_kg = await extract_entities(
                             chunks,
+                            known_entities,
                             knowledge_graph_inst=self.chunk_entity_relation_graph,
                             entity_vdb=self.entities_vdb,
                             relationships_vdb=self.relationships_vdb,
@@ -418,10 +394,6 @@ class LightRAG:
 
                         self.chunk_entity_relation_graph = maybe_new_kg
 
-                        # Store original document and chunks
-                        await self.full_docs.upsert(
-                            {doc_id: {"content": doc["content"]}}
-                        )
                         await self.text_chunks.upsert(chunks)
 
                         # Update status to processed
@@ -455,55 +427,6 @@ class LightRAG:
                 finally:
                     # Ensure all indexes are updated after each document
                     await self._insert_done()
-
-    async def ainsert_chunks(self, company_id):
-        """Insert chunks
-        """
-        # Extract and store entities and relationships
-        chunks = get_chunks(
-            min_tokens=1200,
-            company_id=company_id
-        )
-        # filter out chunks that are already processed
-        new_chunks_status = {
-            chk_id: {
-                "status": DocStatus.PENDING,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-            }
-            for chk_id in chunks
-        }
-        _add_chunk_keys = await self.doc_status.filter_keys(list(new_chunks_status.keys()))
-
-        chunks = {k: v for k, v in chunks.items() if k in _add_chunk_keys}
-        new_chunks_status = {k: v for k, v in new_chunks_status.items() if k in _add_chunk_keys}
-
-        if not new_chunks_status:
-            logger.info("All documents have been processed or are duplicates")
-            return
-        
-        logger.info(f"Processing {len(new_chunks_status)} new unique chunks")
-
-        known_entities = save_or_load_known_entities(format=True)
-        maybe_new_kg = await extract_entities(
-            chunks,
-            new_chunks_status,
-            self.doc_status,
-            known_entities,
-            knowledge_graph_inst=self.chunk_entity_relation_graph,
-            entity_vdb=self.entities_vdb,
-            relationships_vdb=self.relationships_vdb,
-            global_config=asdict(self),
-        )
-
-        if maybe_new_kg is None:
-            raise Exception(
-                "Failed to extract entities and relationships"
-            )
-
-        self.chunk_entity_relation_graph = maybe_new_kg
-        await self.text_chunks.upsert(chunks)
-        await self._insert_done()
 
     async def _insert_done(self):
         tasks = []

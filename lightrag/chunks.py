@@ -1,7 +1,7 @@
 import json
 import boto3
 import psycopg2
-from random import randint
+from collections import Counter
 from .base import TextChunkSchema
 from .utils import encode_string_by_tiktoken, merge_content
 from .prompt import AGG_CHUNK_SEP
@@ -46,122 +46,112 @@ def db_connection(env):
     )
 
 
-def get_chunks(
-    min_tokens: int,
-    company_id: int,
-    batch_size: int = 100,
-):
+async def get_docs(company_id: int, env: str):
     connection = None
+    docs = []
     try:
-        connection = db_connection("dev")
+        connection = db_connection(env)
         cursor = connection.cursor()
-
-        count_query = f"SELECT COUNT(*) FROM {chunks_table} where company_id = {company_id}"
-        cursor.execute(count_query)
-        total_rows = cursor.fetchone()[0]
-
-        combined_chunks = []
-
-        current_source_id = None
-        current_chunk_ids = []
-        current_contents = []
-        current_tokens = 0
-        combined_sequence = 0
-
-        offset = 0
-        while offset < total_rows:
-            query = f"""
-                SELECT chunk_id, content, sequence, source_id, source
-                FROM {chunks_table} WHERE company_id = {company_id}
-                ORDER BY source_id, sequence
-                LIMIT {batch_size} OFFSET {offset}
-            """
-            cursor.execute(query)
-            rows = cursor.fetchall()
-
-            if not rows:
-                break
-
-            for (chunk_id, content, sequence, source_id, source) in rows:
-
-                if current_source_id is not None and source_id != current_source_id:
-                    if current_chunk_ids:
-                        combined_chunk_id = AGG_CHUNK_SEP.join(current_chunk_ids)
-                        merged_content = merge_content(current_contents)
-                        combined_chunks.append({
-                            "tokens": current_tokens,
-                            "chunk_id": combined_chunk_id,
-                            "content": merged_content,
-                            "sequence": combined_sequence,
-                            "source_id": current_source_id,
-                            "subgraphs": subgraph_sources.get(source, []) + ['ALL'],
-                        })
-                        current_chunk_ids = []
-                        current_contents = []
-                        current_tokens = 0
-                        combined_sequence = 0
-
-                if current_source_id != source_id:
-                    current_source_id = source_id
-
-                tokens = len(encode_string_by_tiktoken(content))
-                current_chunk_ids.append(chunk_id)
-                current_contents.append(content)
-                current_tokens += tokens
-
-                if current_tokens >= min_tokens:
-                    combined_chunk_id = AGG_CHUNK_SEP.join(current_chunk_ids)
-                    merged_content = merge_content(current_contents)
-                    combined_chunks.append({
-                        "tokens": current_tokens,
-                        "chunk_id": combined_chunk_id,
-                        "content": merged_content,
-                        "sequence": combined_sequence,
-                        "source_id": current_source_id,
-                        "subgraphs": subgraph_sources.get(source, []) + ['ALL'],
-                    })
-                    
-                    combined_sequence += 1
-
-                    current_chunk_ids = []
-                    current_contents = []
-                    current_tokens = 0
-
-            print(f"read {offset} rows of total {total_rows}")
-            offset += batch_size 
-
-        if current_tokens > 0:
-            combined_chunk_id = AGG_CHUNK_SEP.join(current_chunk_ids)
-            merged_content = merge_content(current_contents)
-            combined_chunks.append({
-                "tokens": current_tokens,
-                "chunk_id": combined_chunk_id,
-                "content": merged_content,
-                "sequence": combined_sequence,
-                "source_id": current_source_id,
-                "subgraphs": subgraph_sources.get(source, []) + ['ALL'],
-            })
-            
-        return {
-            ch["chunk_id"]: TextChunkSchema(
-                            tokens=ch["tokens"],
-                            content=ch["content"],
-                            full_doc_id=str(ch["source_id"]),
-                            chunk_order_index=ch["sequence"],
-                            subgraphs=ch["subgraphs"]
-                        )
-            for ch in combined_chunks
-        }
-
+        docs_query = f"SELECT DISTINCT source_id FROM {chunks_table} WHERE company_id = {company_id}"
+        cursor.execute(docs_query)
+        docs = [doc[0] for doc in cursor.fetchall()]
+        print(f"Total {len(docs)} docs found")
     except Exception as e:
         print("Error occurred:", e)
     finally:
         if connection:
             connection.close()
+    return docs
 
-if __name__ == "__main__":
-    get_chunks(
+
+def get_unique_chunk_ids(chunk_ids):
+    chunk_ids_split = [cid.split('-') for cid in chunk_ids]
+    chunk_ids_freq = Counter(item[1] for item in chunk_ids_split)
+    min_freq_chunk_id = min(chunk_ids_freq, key=chunk_ids_freq.get)
+    return [i for i, item in enumerate(chunk_ids_split) if item[1] == min_freq_chunk_id]
+
+
+async def get_chunks(doc_id: int, min_tokens, company_id: int, env: str):
+    connection = None
+    chunks = []
+    try:
+        connection = db_connection(env)
+        cursor = connection.cursor()
+        docs_query = f"""
+            SELECT chunk_id, content, sequence, source
+            FROM {chunks_table} WHERE company_id = {company_id} AND source_id = {doc_id}
+            ORDER BY sequence"""
+        cursor.execute(docs_query)
+        rows = cursor.fetchall()
+        chunks = [rows[row_idx] for row_idx in get_unique_chunk_ids([row[0] for row in rows])]
+    except Exception as e:
+        print("Error occurred:", e)
+    finally:
+        if connection:
+            connection.close()
+    return get_chunks_helper(chunks, min_tokens, doc_id)
+
+
+def get_chunks_helper(rows, min_tokens: int, source_id: int):
+    combined_chunks = []
+
+    current_chunk_ids = []
+    current_contents = []
+    current_tokens = 0
+    combined_sequence = 0
+
+    for chunk_id, content, sequence, source in rows:
+        tokens = len(encode_string_by_tiktoken(content))
+        current_chunk_ids.append(chunk_id)
+        current_contents.append(content)
+        current_tokens += tokens
+
+        if current_tokens >= min_tokens:
+            combined_chunk_id = AGG_CHUNK_SEP.join(current_chunk_ids)
+            combined_chunks.append({
+                "tokens": current_tokens,
+                "chunk_id": combined_chunk_id,
+                "content": merge_content(current_contents),
+                "sequence": combined_sequence,
+                "source_id": source_id,
+                "subgraphs": subgraph_sources.get(source, []) + ['ALL'],
+            })
+            
+            combined_sequence += 1
+            current_chunk_ids = []
+            current_contents = []
+            current_tokens = 0
+
+    if current_tokens > 0:
+        combined_chunk_id = AGG_CHUNK_SEP.join(current_chunk_ids)
+        combined_chunks.append({
+            "tokens": current_tokens,
+            "chunk_id": combined_chunk_id,
+            "content": merge_content(current_contents),
+            "sequence": combined_sequence,
+            "source_id": source_id,
+            "subgraphs": subgraph_sources.get(source, []) + ['ALL'],
+        })
+        
+    return {
+        ch["chunk_id"]: TextChunkSchema(
+            tokens=ch["tokens"],
+            content=ch["content"],
+            full_doc_id=str(ch["source_id"]),
+            chunk_order_index=ch["sequence"],
+            subgraphs=ch["subgraphs"]
+        )
+        for ch in combined_chunks
+    }
+
+
+async def main():
+    await get_chunks(
         min_tokens=1200,
         batch_size=100,
         company_id=18,
     )
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())

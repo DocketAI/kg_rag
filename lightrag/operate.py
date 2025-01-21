@@ -269,8 +269,6 @@ async def _merge_edges_then_upsert(
 
 async def extract_entities(
     chunks: dict[str, TextChunkSchema],
-    new_chunks_status: dict[str, dict],
-    chunks_status_instance,
     known_entities: dict[str, any],
     knowledge_graph_inst: BaseGraphStorage,
     entity_vdb: BaseVectorStorage,
@@ -331,13 +329,6 @@ async def extract_entities(
         chunk_key = chunk_key_dp[0]
         chunk_dp = chunk_key_dp[1]
         content = chunk_dp["content"]
-
-        chunk_status = {
-            "status": DocStatus.FAILED,
-            "created_at": new_chunks_status[chunk_key]["created_at"],
-            "updated_at": datetime.now().isoformat()
-        }
-        await chunks_status_instance.upsert({chunk_key: chunk_status})
         # hint_prompt = entity_extract_prompt.format(**context_base, input_text=content)
         hint_prompt = entity_extract_prompt.format(
             **context_base, input_text="{input_text}"
@@ -404,13 +395,6 @@ async def extract_entities(
             end="",
             flush=True,
         )
-        chunk_status.update(
-                {
-                    "status": DocStatus.PROCESSED,
-                    "updated_at": datetime.now().isoformat(),
-                }
-        )
-        await chunks_status_instance.upsert({chunk_key: chunk_status})
         return dict(maybe_nodes), dict(maybe_edges)
 
     results = []

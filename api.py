@@ -4,6 +4,7 @@ import os
 from lightrag import LightRAG, QueryParam
 from lightrag.llm import openai_complete_if_cache, openai_embedding
 from lightrag.utils import EmbeddingFunc, save_or_load_known_entities
+from lightrag.config import insert_batch_size, min_chunk_tokens, env
 from dotenv import load_dotenv
 import numpy as np
 from typing import Optional, Dict, Any
@@ -68,6 +69,11 @@ async def get_embedding_dim():
 # Initialize RAG instance
 rag = LightRAG(
     working_dir=WORKING_DIR,
+    addon_params={
+        "env": env,
+        "insert_batch_size": insert_batch_size,
+        "min_chunk_tokens": min_chunk_tokens
+    },
     llm_model_func=llm_model_func,
     embedding_func=EmbeddingFunc(
         embedding_dim=asyncio.run(get_embedding_dim()),
@@ -190,7 +196,7 @@ async def insert_file(file: UploadFile = File(...)):
 async def insert_chunks(company_id: int):
     try:
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, lambda: rag.insert_chunks(company_id))
+        await loop.run_in_executor(None, lambda: rag.insert(company_id))
 
         return Response(
             status="success",
