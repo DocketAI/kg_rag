@@ -313,17 +313,17 @@ class LightRAG:
             "JsonDocStatusStorage": JsonDocStatusStorage,
         }
 
-    def insert(self, company_id):
+    def insert(self):
         loop = always_get_an_event_loop()
-        return loop.run_until_complete(self.ainsert(company_id))
+        return loop.run_until_complete(self.ainsert())
 
-    async def ainsert(self, company_id):
+    async def ainsert(self):
         """Insert documents with checkpoint support
 
         Args:
             company_id: company id
         """
-        docs = await get_docs(company_id, self.addon_params.get("env"))
+        docs = await get_docs(self.addon_params.get("company_id"), self.addon_params.get("env"))
 
         new_docs = {
             doc_id: {
@@ -342,7 +342,7 @@ class LightRAG:
             return
 
         logger.info(f"Processing {len(new_docs)} new unique documents")
-        known_entities = save_or_load_known_entities(format=True)
+        self.addon_params.update({"known_entities": save_or_load_known_entities(format=True)})
 
         # Process documents in batches
         batch_size = self.addon_params.get("insert_batch_size", 10)
@@ -352,81 +352,84 @@ class LightRAG:
             for doc_id, doc in tqdm_async(
                 batch_docs.items(), desc=f"Processing batch {i//batch_size + 1}"
             ):
-                try:
-                    # Update status to processing
-                    doc_status = {
-                        "status": DocStatus.PROCESSING,
-                        "created_at": doc["created_at"],
+                await self._ainsert_doc(doc_id, doc)
+
+    async def _ainsert_doc(self, doc_id, doc):
+        try:
+            # Update status to processing
+            print(f"processing doc {doc_id}")
+            doc_status = {
+                "status": DocStatus.PROCESSING,
+                "created_at": doc["created_at"],
+                "updated_at": datetime.now().isoformat(),
+            }
+            await self.doc_status.upsert({doc_id: doc_status})
+
+            # Generate chunks from document
+            chunks = await get_chunks(doc_id, self.addon_params.get("min_chunk_tokens", 1200), self.addon_params.get("company_id"), self.addon_params.get("env"))
+
+            # Update status with chunks information
+            doc_status.update(
+                {
+                    "chunks_count": len(chunks),
+                    "updated_at": datetime.now().isoformat(),
+                }
+            )
+            await self.doc_status.upsert({doc_id: doc_status})
+
+            try:
+                # Store chunks in vector database
+                # await self.chunks_vdb.upsert(chunks)
+
+                # Extract and store entities and relationships
+                maybe_new_kg = await extract_entities(
+                    chunks,
+                    self.addon_params.get("known_entities", ""),
+                    knowledge_graph_inst=self.chunk_entity_relation_graph,
+                    entity_vdb=self.entities_vdb,
+                    relationships_vdb=self.relationships_vdb,
+                    global_config=asdict(self),
+                )
+
+                if maybe_new_kg is None:
+                    raise Exception(
+                        "Failed to extract entities and relationships"
+                    )
+
+                self.chunk_entity_relation_graph = maybe_new_kg
+
+                await self.text_chunks.upsert(chunks)
+
+                # Update status to processed
+                doc_status.update(
+                    {
+                        "status": DocStatus.PROCESSED,
                         "updated_at": datetime.now().isoformat(),
                     }
-                    await self.doc_status.upsert({doc_id: doc_status})
+                )
+                await self.doc_status.upsert({doc_id: doc_status})
 
-                    # Generate chunks from document
-                    chunks = await get_chunks(doc_id, self.addon_params.get("min_chunk_tokens", 1200), company_id, self.addon_params.get("env"))
+            except Exception as e:
+                # Mark as failed if any step fails
+                doc_status.update(
+                    {
+                        "status": DocStatus.FAILED,
+                        "error": str(e),
+                        "updated_at": datetime.now().isoformat(),
+                    }
+                )
+                await self.doc_status.upsert({doc_id: doc_status})
+                raise e
 
-                    # Update status with chunks information
-                    doc_status.update(
-                        {
-                            "chunks_count": len(chunks),
-                            "updated_at": datetime.now().isoformat(),
-                        }
-                    )
-                    await self.doc_status.upsert({doc_id: doc_status})
+        except Exception as e:
+            import traceback
 
-                    try:
-                        # Store chunks in vector database
-                        # await self.chunks_vdb.upsert(chunks)
+            error_msg = f"Failed to process document {doc_id}: {str(e)}\n{traceback.format_exc()}"
+            logger.error(error_msg)
 
-                        # Extract and store entities and relationships
-                        maybe_new_kg = await extract_entities(
-                            chunks,
-                            known_entities,
-                            knowledge_graph_inst=self.chunk_entity_relation_graph,
-                            entity_vdb=self.entities_vdb,
-                            relationships_vdb=self.relationships_vdb,
-                            global_config=asdict(self),
-                        )
-
-                        if maybe_new_kg is None:
-                            raise Exception(
-                                "Failed to extract entities and relationships"
-                            )
-
-                        self.chunk_entity_relation_graph = maybe_new_kg
-
-                        await self.text_chunks.upsert(chunks)
-
-                        # Update status to processed
-                        doc_status.update(
-                            {
-                                "status": DocStatus.PROCESSED,
-                                "updated_at": datetime.now().isoformat(),
-                            }
-                        )
-                        await self.doc_status.upsert({doc_id: doc_status})
-
-                    except Exception as e:
-                        # Mark as failed if any step fails
-                        doc_status.update(
-                            {
-                                "status": DocStatus.FAILED,
-                                "error": str(e),
-                                "updated_at": datetime.now().isoformat(),
-                            }
-                        )
-                        await self.doc_status.upsert({doc_id: doc_status})
-                        raise e
-
-                except Exception as e:
-                    import traceback
-
-                    error_msg = f"Failed to process document {doc_id}: {str(e)}\n{traceback.format_exc()}"
-                    logger.error(error_msg)
-                    continue
-
-                finally:
-                    # Ensure all indexes are updated after each document
-                    await self._insert_done()
+        finally:
+            # Ensure all indexes are updated after each document
+            await self._insert_done()
 
     async def _insert_done(self):
         tasks = []

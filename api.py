@@ -72,7 +72,8 @@ rag = LightRAG(
     addon_params={
         "env": env,
         "insert_batch_size": insert_batch_size,
-        "min_chunk_tokens": min_chunk_tokens
+        "min_chunk_tokens": min_chunk_tokens,
+        "known_entities": save_or_load_known_entities(format=True)
     },
     llm_model_func=llm_model_func,
     embedding_func=EmbeddingFunc(
@@ -195,8 +196,9 @@ async def insert_file(file: UploadFile = File(...)):
 @app.post("/insert_chunks", response_model=Response)
 async def insert_chunks(company_id: int):
     try:
+        rag.addon_params.update({"company_id": company_id})
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, lambda: rag.insert(company_id))
+        await loop.run_in_executor(None, lambda: rag.insert())
 
         return Response(
             status="success",
