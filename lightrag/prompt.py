@@ -21,9 +21,8 @@ Use {language} as the output language.
 
 {known_entities}
 
-Note:
-1. The entity types below are the primary types of interest, but they are not exhaustive.
-2. If you identify other clearly defined entity types (such as "location", "concept", etc.) that do not fit into the list of primary types, you should still capture them and assign an appropriate entity type label
+-Important Note- 
+**The following list of primary entity types is not exhaustive. Always remain attentive to any additional, well-defined entities (e.g., locations, concepts, roles, events) that may appear in the text. If you encounter an entity type that is not covered by the primary list, create a new, descriptive label for it (e.g., "location" or "concept") and include it in your entity extraction.**
 
 -Entity Types and Definitions-
 - organization: Any company/organization (including {organization} itself and any other referenced organizations)
