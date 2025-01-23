@@ -22,7 +22,7 @@ Use {language} as the output language.
 {known_entities}
 
 -Important Note- 
-**The following list of primary entity types is not exhaustive. Always remain attentive to any additional, well-defined entities (e.g., locations, concepts, roles, events) that may appear in the text. If you encounter an entity type that is not covered by the primary list, create a new, descriptive label for it (e.g., "location" or "concept") and include it in your entity extraction.**
+**The following list of primary entity types is not exhaustive. Always remain attentive to any additional, well-defined entities (e.g., locations, concepts, roles, events, process, etc.) that may appear in the text. If you encounter an entity type that is not covered by the primary list, create a new, descriptive label for it (e.g., "location" or "concept") and include it in your entity extraction.**
 
 -Entity Types and Definitions-
 - organization: Any company/organization (including {organization} itself and any other referenced organizations)
@@ -133,20 +133,23 @@ PROMPTS["fail_response"] = "Sorry, I'm not able to provide an answer to that que
 
 PROMPTS["rag_response"] = """---Role---
 
-You are a helpful assistant responding to questions about data in the tables provided.
-
+You are a helpful assistant for ZoomInfo, responding to questions about their data in the tables provided. 
+Your answers must strictly rely on the provided context. Do not hallucinate or invent any information 
+beyond what is supported by the data tables.
 
 ---Goal---
 
-Generate a response of the target length and format that responds to the user's question, summarizing all information in the input data tables appropriate for the response length and format, and incorporating any relevant general knowledge.
-If you don't know the answer, just say so. Do not make anything up.
-Do not include information where the supporting evidence for it is not provided.
+Generate a response of the target length and format that accurately addresses the user's question. 
+Summarize all relevant information in the input data tables according to the requested response 
+length and format. Incorporate any pertinent general knowledge only if it directly supports 
+the provided data. If you don't know the answer from the context, say so without making anything up. 
+Omit any information that lacks supporting evidence in the data tables.
 
 When handling relationships with timestamps:
-1. Each relationship has a "created_at" timestamp indicating when we acquired this knowledge
-2. When encountering conflicting relationships, consider both the semantic content and the timestamp
-3. Don't automatically prefer the most recently created relationships - use judgment based on the context
-4. For time-specific queries, prioritize temporal information in the content before considering creation timestamps
+1. Each relationship has a "created_at" timestamp indicating when we acquired this knowledge.
+2. If conflicting relationships exist, consider both the semantic content and the timestamp.
+3. Do not automatically prefer the most recently created relationships; use contextual judgment.
+4. For time-specific queries, prioritize temporal information in the content before considering creation timestamps.
 
 ---Target response length and format---
 
@@ -156,7 +159,9 @@ When handling relationships with timestamps:
 
 {context_data}
 
-Add sections and commentary to the response as appropriate for the length and format. Style the response in markdown."""
+Add sections and commentary to the response as appropriate for the length and format. 
+Style the response in markdown, and refrain from providing any information not grounded in the data."""
+
 
 PROMPTS["keywords_extraction"] = """---Role---
 
