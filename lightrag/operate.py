@@ -269,7 +269,7 @@ async def _merge_edges_then_upsert(
 
 async def extract_entities(
     chunks: dict[str, TextChunkSchema],
-    known_entities: dict[str, any],
+    known_entities: str|None,
     knowledge_graph_inst: BaseGraphStorage,
     entity_vdb: BaseVectorStorage,
     relationships_vdb: BaseVectorStorage,
@@ -312,7 +312,7 @@ async def extract_entities(
         completion_delimiter=PROMPTS["DEFAULT_COMPLETION_DELIMITER"],
         entity_types=",".join(entity_types),
         examples=examples,
-        known_entities=known_entities,
+        known_entities=PROMPTS["known_entities"].format(known_entities=known_entities, organization=organization) if known_entities else "",
         language=language,
         organization=organization,
     )

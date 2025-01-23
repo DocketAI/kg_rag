@@ -73,7 +73,6 @@ rag = LightRAG(
         "env": env,
         "insert_batch_size": insert_batch_size,
         "min_chunk_tokens": min_chunk_tokens,
-        "known_entities": save_or_load_known_entities(format=True)
     },
     llm_model_func=llm_model_func,
     embedding_func=EmbeddingFunc(

@@ -16,6 +16,7 @@ import numpy as np
 import tiktoken
 
 from lightrag.prompt import PROMPTS
+from lightrag.config import include_known_entities
 
 
 class UnlimitedSemaphore:
@@ -621,11 +622,12 @@ def format_json_to_string(data: Any) -> str:
 def save_or_load_known_entities(entity_type=None, entity_data=None, format=False):
     save_file = os.path.join(WORKING_DIR, "known_entities.json")
     data = {}
-    if os.path.exists(save_file):
-        with open(save_file, "r") as f:
-            data = json.load(f)
-    if entity_type and entity_data: 
-        data[entity_type.value] = data.get(entity_type.value, []) + [entity_data]
-        with open(save_file, "w") as f:
-            json.dump(data, f)
+    if include_known_entities:
+        if os.path.exists(save_file):
+            with open(save_file, "r") as f:
+                data = json.load(f)
+        if entity_type and entity_data: 
+            data[entity_type.value] = data.get(entity_type.value, []) + [entity_data]
+            with open(save_file, "w") as f:
+                json.dump(data, f)
     return format_json_to_string(data) if format else data

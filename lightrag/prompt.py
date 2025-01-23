@@ -10,15 +10,15 @@ PROMPTS["DEFAULT_RECORD_DELIMITER"] = "##"
 PROMPTS["DEFAULT_COMPLETION_DELIMITER"] = "<|COMPLETE|>"
 PROMPTS["process_tickers"] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 PROMPTS["DEFAULT_ENTITY_TYPES"] = ["organization", "product_line", "product_sku", "feature", "security", "sme", "use_case"]
-
+PROMPTS["known_entities"] = """Here are some pre known entities of {organization} that may appear in the text. Use these details to unify them with any mentions in the text. If additional information about these entities is found, merge it into the description. If you encounter new entities not listed here, capture them separately using the same entity_type conventions.
+#############################
+-Known Entities-
+#############################
+{known_entities}"""
 PROMPTS["entity_extraction"] = """-Goal-
 Given {organization}'s (organization) data, identify all entities that match the given entity types and then identify relationships among them. Note that {organization}'s data may also include mentions of other organizations (e.g., partners, clients, competitors in testimonials or customer success stories). These other organizations should also be captured with the entity type "organization."
 Use {language} as the output language.
 
-Here are some pre known entities of {organization} that may appear in the text. Use these details to unify them with any mentions in the text. If additional information about these entities is found, merge it into the description. If you encounter new entities not listed here, capture them separately using the same entity_type conventions.
-#############################
--Known Entities-
-#############################
 {known_entities}
 
 Note:

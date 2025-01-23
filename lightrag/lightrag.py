@@ -341,18 +341,19 @@ class LightRAG:
             logger.info("All documents have been processed or are duplicates")
             return
 
-        logger.info(f"Processing {len(new_docs)} new unique documents")
         self.addon_params.update({"known_entities": save_or_load_known_entities(format=True)})
+        logger.info(f"Processing {len(new_docs)} new unique documents")
 
         # Process documents in batches
         batch_size = self.addon_params.get("insert_batch_size", 10)
         for i in range(0, len(new_docs), batch_size):
             batch_docs = dict(list(new_docs.items())[i : i + batch_size])
-
+            tasks = []
             for doc_id, doc in tqdm_async(
                 batch_docs.items(), desc=f"Processing batch {i//batch_size + 1}"
             ):
-                await self._ainsert_doc(doc_id, doc)
+                tasks.append(self._ainsert_doc(doc_id, doc))
+            await asyncio.gather(*tasks)
 
     async def _ainsert_doc(self, doc_id, doc):
         try:
@@ -384,7 +385,7 @@ class LightRAG:
                 # Extract and store entities and relationships
                 maybe_new_kg = await extract_entities(
                     chunks,
-                    self.addon_params.get("known_entities", ""),
+                    self.addon_params.get("known_entities"),
                     knowledge_graph_inst=self.chunk_entity_relation_graph,
                     entity_vdb=self.entities_vdb,
                     relationships_vdb=self.relationships_vdb,

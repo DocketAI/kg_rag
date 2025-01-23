@@ -7,4 +7,5 @@ subgraph_sources={
 }
 insert_batch_size=5
 min_chunk_tokens=1200
+include_known_entities=False
     
