@@ -19,7 +19,7 @@ class QueryParam:
     mode: Literal["local", "global", "hybrid", "naive", "mix"] = "global"
     only_need_context: bool = False
     only_need_prompt: bool = False
-    response_type: str = "Multiple Paragraphs"
+    response_type: str = "according to the nature of the question"
     stream: bool = False
     # Number of top-k items to retrieve; corresponds to entities in "local" mode and relationships in "global" mode.
     top_k: int = 60
