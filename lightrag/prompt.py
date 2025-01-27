@@ -159,7 +159,8 @@ When handling relationships with timestamps:
 
 {context_data}
 
-Add sections and commentary to the response as appropriate for the length and format. 
+Add sections and commentary to the response as appropriate for the length and format.
+Avoid mentioning the use of data or sources explicitly in your responses. Instead, present the answer seamlessly and as naturally as possible.
 Style the response in markdown, and refrain from providing any information not grounded in the data."""
 
 
@@ -336,4 +337,4 @@ When handling information with timestamps:
 - List up to 5 most important reference sources at the end under "References", clearly indicating whether each source is from Knowledge Graph (KG) or Vector Data (VD)
   Format: [KG/VD] Source content
   
-Add sections and commentary to the response as appropriate for the length and format. If the provided information is insufficient to answer the question, clearly state that you don't know or cannot provide an answer in the same language as the user's question."""
+Add sections and commentary to the response as appropriate for the length and format. Avoid mentioning the use of data or sources explicitly in your responses. Instead, present the answer seamlessly and as naturally as possible. If the provided information is insufficient to answer the question, clearly state that you don't know or cannot provide an answer in the same language as the user's question."""
