@@ -2,6 +2,7 @@ import json
 import boto3
 import psycopg2
 from collections import Counter
+from functools import lru_cache
 from .base import TextChunkSchema
 from .utils import encode_string_by_tiktoken, merge_content
 from .prompt import AGG_CHUNK_SEP
@@ -18,7 +19,7 @@ def get_file(file, env):
     prefix = "/".join(file.split("/")[3:])
     return s3_bucket, prefix
 
-
+@lru_cache(maxsize=128)
 def read_config(file, env):
     s3_bucket, prefix = get_file(file, env)
     s3 = boto3.resource("s3")
