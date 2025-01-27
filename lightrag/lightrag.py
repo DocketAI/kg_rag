@@ -380,7 +380,7 @@ class LightRAG:
 
             try:
                 # Store chunks in vector database
-                # await self.chunks_vdb.upsert(chunks)
+                await self.chunks_vdb.upsert(chunks)
 
                 # Extract and store entities and relationships
                 maybe_new_kg = await extract_entities(
