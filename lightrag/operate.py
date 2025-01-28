@@ -627,6 +627,7 @@ async def _build_query_context(
 ):
     # ll_entities_context, ll_relations_context, ll_text_units_context = "", "", ""
     # hl_entities_context, hl_relations_context, hl_text_units_context = "", "", ""
+    references = {}
 
     ll_keywords, hl_keywords = keywords[0], keywords[1]
 
@@ -647,6 +648,7 @@ async def _build_query_context(
                 ll_entities_context,
                 ll_relations_context, 
                 ll_text_units_context,
+                node_references
             ) = await _get_node_data(
                 ll_keywords,
                 knowledge_graph_inst,
@@ -654,6 +656,7 @@ async def _build_query_context(
                 text_chunks_db,
                 query_param,
             )
+            references.update(node_references)
     if query_param.mode in ["global", "hybrid"]:
         # if hl_keywrds == "":
         if len(hl_keywords) == 0:
@@ -671,6 +674,7 @@ async def _build_query_context(
                 hl_entities_context,
                 hl_relations_context,
                 hl_text_units_context,
+                edge_references
             ) = await _get_edge_data(
                 hl_keywords,
                 knowledge_graph_inst,
@@ -678,6 +682,7 @@ async def _build_query_context(
                 text_chunks_db,
                 query_param,
             )
+            references.update(edge_references)
             if (
                 hl_entities_context == ""
                 and hl_relations_context == ""
@@ -703,20 +708,30 @@ async def _build_query_context(
             hl_relations_context,
             hl_text_units_context,
         )
-    return f"""
------Entities-----
-```csv
-{entities_context}
-```
------Relationships-----
-```csv
-{relations_context}
-```
------Sources-----
-```csv
-{text_units_context}
-```
-"""
+    if query_param.only_need_context:
+        return json.dumps({
+            "context": {
+                "entities": entities_context,
+                "relations": relations_context,
+                "chunks": text_units_context
+            },
+            "references": references
+        })
+    else:
+        return f"""
+    -----Entities-----
+    ```csv
+    {entities_context}
+    ```
+    -----Relationships-----
+    ```csv
+    {relations_context}
+    ```
+    -----Sources-----
+    ```csv
+    {text_units_context}
+    ```
+    """
 
 async def _get_node_data(
     keywords,
@@ -758,6 +773,10 @@ async def _get_node_data(
     use_relations = await _find_most_related_edges_from_entities(
         node_datas, query_param, knowledge_graph_inst
     )
+    references = {
+        "entities": [chunk["full_doc_id"] for chunk in use_text_units]
+    }
+
     logger.info(
         f"Local query uses {len(node_datas)} entites, {len(use_relations)} relations, {len(use_text_units)} text units"
     )
@@ -811,7 +830,7 @@ async def _get_node_data(
     for i, t in enumerate(use_text_units):
         text_units_section_list.append([i, t["content"]])
     text_units_context = list_of_list_to_csv(text_units_section_list)
-    return entities_context, relations_context, text_units_context
+    return entities_context, relations_context, text_units_context, references
 
 
 async def _find_most_related_text_unit_from_entities(
@@ -876,8 +895,8 @@ async def _find_most_related_text_unit_from_entities(
 
     all_text_units = sorted(
         all_text_units, 
-        # key=lambda x: (x["order"], -x["relation_counts"]),
-        key=lambda x: (-x["relation_counts"]),
+        key=lambda x: (x["order"], -x["relation_counts"]),
+        # key=lambda x: (-x["relation_counts"]),
     )
 
     all_text_units = truncate_list_by_token_size(
@@ -946,7 +965,7 @@ async def _get_edge_data(
     # results = await relationships_vdb.query(keywords, top_k=query_param.top_k)
 
     if not len(results):
-        return "", "", ""
+        return "", "", "", {}
 
     edge_datas = await asyncio.gather(
         *[knowledge_graph_inst.get_edge(r["src_id"], r["tgt_id"]) for r in results]
@@ -983,6 +1002,9 @@ async def _get_edge_data(
     use_text_units = await _find_related_text_unit_from_relationships(
         edge_datas, query_param, text_chunks_db, knowledge_graph_inst
     )
+    references = {
+        "relations": [chunk["full_doc_id"] for chunk in use_text_units]
+    }
     logger.info(
         f"Global query uses {len(use_entities)} entites, {len(edge_datas)} relations, {len(use_text_units)} text units"
     )
@@ -1035,7 +1057,7 @@ async def _get_edge_data(
     for i, t in enumerate(use_text_units):
         text_units_section_list.append([i, t["content"]])
     text_units_context = list_of_list_to_csv(text_units_section_list)
-    return entities_context, relations_context, text_units_context
+    return entities_context, relations_context, text_units_context, references
 
 
 async def _find_most_related_entities_from_relationships(
@@ -1282,11 +1304,12 @@ async def mix_kg_vector_query(
             )
 
             # Extract keywords using LLM
-            kw_prompt = PROMPTS["keywords_extraction"].format(
-                query=query, examples=examples, language=language
-            )
+            # LLM generate keywords
+            kw_prompt_temp = PROMPTS["keywords_extraction"]
+            kw_prompt = kw_prompt_temp.format(query=query, examples=examples, language=language)
             result = await use_model_func(kw_prompt, keyword_extraction=True)
-
+            logger.info("kw_prompt result:")
+            print(result)
             match = re.search(r"\{.*\}", result, re.DOTALL)
             if not match:
                 logger.warning(
@@ -1304,22 +1327,25 @@ async def mix_kg_vector_query(
                 return None
 
             # Convert keyword lists to strings
-            ll_keywords_str = ", ".join(ll_keywords) if ll_keywords else ""
-            hl_keywords_str = ", ".join(hl_keywords) if hl_keywords else ""
+            # ll_keywords_str = ", ".join(ll_keywords) if ll_keywords else ""
+            # hl_keywords_str = ", ".join(hl_keywords) if hl_keywords else ""
+            # also using query to find matching entities
+            ll_keywords.insert(0, query)
+            hl_keywords.insert(0, query)
 
             # Set query mode based on available keywords
-            if not ll_keywords_str and not hl_keywords_str:
+            if not ll_keywords and not hl_keywords:
                 return None
-            elif not ll_keywords_str:
+            elif not ll_keywords:
                 query_param.mode = "global"
-            elif not hl_keywords_str:
+            elif not hl_keywords:
                 query_param.mode = "local"
             else:
                 query_param.mode = "hybrid"
-
+            keywords = [ll_keywords, hl_keywords]
             # Build knowledge graph context
             context = await _build_query_context(
-                [ll_keywords_str, hl_keywords_str],
+                keywords,
                 knowledge_graph_inst,
                 entities_vdb,
                 relationships_vdb,
@@ -1337,7 +1363,7 @@ async def mix_kg_vector_query(
         # Reuse vector search logic from naive_query
         try:
             # Reduce top_k for vector search in hybrid mode since we have structured information from KG
-            mix_topk = min(10, query_param.top_k)
+            mix_topk = min(5, query_param.top_k)
             results = await chunks_vdb.query(query, top_k=mix_topk)
             if not results:
                 return None
@@ -1368,14 +1394,21 @@ async def mix_kg_vector_query(
                 return None
 
             # Include time information in content
-            formatted_chunks = []
-            for c in maybe_trun_chunks:
-                chunk_text = c["content"]
-                if c["created_at"]:
-                    chunk_text = f"[Created at: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(c['created_at']))}]\n{chunk_text}"
-                formatted_chunks.append(chunk_text)
+            formatted_chunks = [["id", "content"]]
+            for i, c in enumerate(maybe_trun_chunks):
+                # if c["created_at"]:
+                #     chunk_text = f"[Created at: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(c['created_at']))}]\n{chunk_text}"
+                formatted_chunks.append([i, c["content"]])
 
-            return "\n--New Chunk--\n".join(formatted_chunks)
+            if query_param.only_need_context:
+                return {
+                    "context": {
+                        "chunks": list_of_list_to_csv(formatted_chunks)
+                    },
+                    "references": {"chunks": [chunk["full_doc_id"] for chunk in chunks]}
+                }
+            else:
+                return list_of_list_to_csv(formatted_chunks)
         except Exception as e:
             logger.error(f"Error in get_vector_context: {e}")
             return None
@@ -1390,7 +1423,7 @@ async def mix_kg_vector_query(
         return PROMPTS["fail_response"]
 
     if query_param.only_need_context:
-        return {"kg_context": kg_context, "vector_context": vector_context}
+        return json.dumps({"kg_context": kg_context, "vector_context": vector_context})
 
     # 5. Construct hybrid prompt
     sys_prompt = PROMPTS["mix_rag_response"].format(
