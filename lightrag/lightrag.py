@@ -383,7 +383,6 @@ class LightRAG:
                 # Extract and store entities and relationships
                 maybe_new_kg = await extract_entities(
                     chunks,
-                    self.addon_params.get("known_entities"),
                     knowledge_graph_inst=self.chunk_entity_relation_graph,
                     entity_vdb=self.entities_vdb,
                     relationships_vdb=self.relationships_vdb,
