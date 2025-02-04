@@ -18,9 +18,7 @@ PROMPTS["known_entities"] = """Here are some pre known entities of {organization
 PROMPTS["entity_extraction"] = """-Goal-
 Given {organization}'s (organization) data, identify all entities that match the given entity types and then identify relationships among them. Note that {organization}'s data may also include mentions of other organizations (e.g., partners, clients, competitors in testimonials or customer success stories). These other organizations should also be captured with the entity type "organization."
 Use {language} as the output language.
-
 {known_entities}
-
 -Important Note- 
 **The following list of primary entity types is not exhaustive. Always remain attentive to any additional, well-defined entities (e.g., locations, concepts, roles, events, process, etc.) that may appear in the text. If you encounter an entity type that is not covered by the primary list, create a new, descriptive label for it (e.g., "location" or "concept") and include it in your entity extraction.**
 
@@ -337,3 +335,17 @@ When handling relationships with timestamps:
 Add sections and commentary to the response as appropriate for the length and format.
 Avoid mentioning the use of data or sources explicitly in your responses. Instead, present the answer seamlessly and as naturally as possible.
 Style the response in markdown, and refrain from providing any information not grounded in the data."""
+
+PROMPTS["firecrawl_prompt_pkg"] = """Entities
+product_line: A category of products solving specific business needs, often organized by functionality or purpose.
+product_sku: A specific version or tier within a product line, with unique features or pricing.
+feature: Functionalities or tools within a product that address specific customer problems.
+security: Security features, standards, or compliance certifications related to the product.
+sme: Subject matter experts (roles or individuals) who provide expertise or guidance on product areas.
+use_case: Real-world applications of the product to solve specific business problems or achieve specific outcomes.
+Relations:
+A product_line might include multiple product_skus. (has_product_sku)
+A product_sku might incorporate certain features. (has_feature)
+A feature might be relevant to specific use cases. (has_use_case)
+A product_line or product_sku might have associated security details. (has_security)
+An sme might be associated with certain product lines or features. (has_sme)"""

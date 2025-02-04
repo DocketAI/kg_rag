@@ -1,0 +1,182 @@
+{
+    "type": "object",
+    "properties": {
+      "product_lines": {
+        "type": "array",
+        "description": "List of different product lines offered by Zoominfo.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "product_line_name": {
+              "type": "string",
+              "description": "A category of products solving specific business needs."
+            },
+            "description": {
+              "type": "string",
+              "description": "Optional descriptive text of the product line."
+            }
+          },
+          "required": ["product_line_name"]
+        }
+      },
+      "product_skus": {
+        "type": "array",
+        "description": "List of product SKUs, representing specific versions/tiers of a product line.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "product_sku_name": {
+              "type": "string",
+              "description": "A distinct product SKU or plan name."
+            },
+            "description": {
+              "type": "string",
+              "description": "Optional descriptive text of the product SKU."
+            }
+          },
+          "required": ["product_sku_name"]
+        }
+      },
+      "features": {
+        "type": "array",
+        "description": "List of different features, representing functionalities or tools within a product.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "feature_name": {
+              "type": "string",
+              "description": "Name/identifier for the feature."
+            },
+            "description": {
+              "type": "string",
+              "description": "Optional descriptive text of the feature."
+            }
+          },
+          "required": ["feature_name"]
+        }
+      },
+      "security": {
+        "type": "array",
+        "description": "List of different security/compliance standards, detailing standards or compliance certifications.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "security_name": {
+              "type": "string",
+              "description": "Name/identifier for the security detail or certification."
+            },
+            "description": {
+              "type": "string",
+              "description": "Optional descriptive text of the security measure."
+            }
+          },
+          "required": ["security_name"]
+        }
+      },
+      "smes": {
+        "type": "array",
+        "description": "List of subject matter experts (SMEs) affiliated with these products/features.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "sme_name": {
+              "type": "string",
+              "description": "Name or identifier of the SME."
+            },
+            "role": {
+              "type": "string",
+              "description": "Role or expertise area of the SME."
+            }
+          },
+          "required": ["sme_name", "role"]
+        }
+      },
+      "use_cases": {
+        "type": "array",
+        "description": "List of different use cases describing how a product solves a specific business need.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "use_case_name": {
+              "type": "string",
+              "description": "Name or title of the use case."
+            },
+            "description": {
+              "type": "string",
+              "description": "Optional descriptive text of how/why this use case applies."
+            }
+          },
+          "required": ["use_case_name"]
+        }
+      },
+      "relationships": {
+        "type": "array",
+        "description": "List of relationships among entities (e.g., which product_skus belong to which product_line).",
+        "items": {
+          "type": "object",
+          "properties": {
+            "source_type": {
+              "type": "string",
+              "enum": [
+                "product_line",
+                "product_sku",
+                "feature",
+                "security",
+                "sme",
+                "use_case"
+              ],
+              "description": "Type of the originating entity in this relationship."
+            },
+            "source_name": {
+              "type": "string",
+              "description": "Name (or unique identifier) of the source entity."
+            },
+            "target_type": {
+              "type": "string",
+              "enum": [
+                "product_line",
+                "product_sku",
+                "feature",
+                "security",
+                "sme",
+                "use_case"
+              ],
+              "description": "Type of the destination entity in this relationship."
+            },
+            "target_name": {
+              "type": "string",
+              "description": "Name (or unique identifier) of the target entity."
+            },
+            "relationship_type": {
+              "type": "string",
+              "enum": [
+                "has_product_sku",
+                "has_feature",
+                "has_use_case",
+                "has_security",
+                "has_sme"
+              ],
+              "description": ""
+            }
+          },
+          "required": [
+            "source_type",
+            "source_name",
+            "target_type",
+            "target_name",
+            "relationship_type"
+          ]
+        }
+      }
+    },
+    "required": [
+      "product_lines",
+      "product_skus",
+      "features",
+      "security",
+      "smes",
+      "use_cases",
+      "relationships"
+    ]
+  }
+  
