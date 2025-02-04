@@ -25,7 +25,6 @@ from .utils import (
     compute_mdhash_id,
     limit_async_func_call,
     convert_response_to_json,
-    save_or_load_known_entities,
     logger,
     set_logger,
 )
@@ -341,7 +340,6 @@ class LightRAG:
             logger.info("All documents have been processed or are duplicates")
             return
 
-        self.addon_params.update({"known_entities": save_or_load_known_entities(format=True)})
         logger.info(f"Processing {len(new_docs)} new unique documents")
 
         # Process documents in batches
