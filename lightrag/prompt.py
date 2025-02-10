@@ -337,15 +337,15 @@ Avoid mentioning the use of data or sources explicitly in your responses. Instea
 Style the response in markdown, and refrain from providing any information not grounded in the data."""
 
 PROMPTS["firecrawl_prompt_pkg"] = """Entities
-product_line: A category of products solving specific business needs, often organized by functionality or purpose.
-product_sku: A specific version or tier within a product line, with unique features or pricing.
-feature: Functionalities or tools within a product that address specific customer problems.
-security: Security features, standards, or compliance certifications related to the product.
-sme: Subject matter experts (roles or individuals) who provide expertise or guidance on product areas.
-use_case: Real-world applications of the product to solve specific business problems or achieve specific outcomes.
+PRODUCT_LINE: A category of products solving specific business needs, often organized by functionality or purpose.
+PRODUCT_SKU: A specific version or tier within a product line, with unique features or pricing.
+FEATURE: Functionalities or tools within a product that address specific customer problems.
+SECURITY: Security features, standards, or compliance certifications related to the product.
+SME: Subject matter experts (roles or individuals) who provide expertise or guidance on product areas.
+USE_CASE: Real-world applications of the product to solve specific business problems or achieve specific outcomes.
 Relations:
-A product_line might include multiple product_skus. (has_product_sku)
-A product_sku might incorporate certain features. (has_feature)
-A feature might be relevant to specific use cases. (has_use_case)
-A product_line or product_sku might have associated security details. (has_security)
-An sme might be associated with certain product lines or features. (has_sme)"""
+A PRODUCT_LINE might include multiple PRODUCT_SKUs. (HAS_PRODUCT_SKU)
+A PRODUCT_SKU might incorporate certain FEATUREs. (HAS_FEATURE)
+A FEATURE might be relevant to specific USE_CASEs. (HAS_USE_CASE)
+A PRODUCT_LINE or PRODUCT_SKU might have associated SECURITY details. (HAS_SECURITY)
+An SME might be associated with certain PRODUCT_LINEs, PRODUCT_SKUs or FEATUREs. (HAS_SME)"""

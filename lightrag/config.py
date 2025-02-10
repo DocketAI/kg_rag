@@ -7,4 +7,5 @@ subgraph_sources={
 }
 insert_batch_size=10
 min_chunk_tokens=1200
+max_glean_steps=5
     
