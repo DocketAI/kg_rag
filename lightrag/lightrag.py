@@ -92,6 +92,7 @@ AGEStorage = lazy_external_import(".kg.age_impl", "AGEStorage")
 PGGraphStorage = lazy_external_import(".kg.postgres_impl", "PGGraphStorage")
 GremlinStorage = lazy_external_import(".kg.gremlin_impl", "GremlinStorage")
 PGDocStatusStorage = lazy_external_import(".kg.postgres_impl", "PGDocStatusStorage")
+QdrantVectorDBStorage = lazy_external_import(".kg.qdrant_impl", "QdrantVectorDBStorage")
 
 
 def always_get_an_event_loop() -> asyncio.AbstractEventLoop:
@@ -133,7 +134,7 @@ class LightRAG:
         }
     )
     kv_storage: str = field(default="JsonKVStorage")
-    vector_storage: str = field(default="NanoVectorDBStorage")
+    vector_storage: str = field(default="QdrantVectorDBStorage")
     graph_storage: str = field(default="NetworkXStorage")
 
     current_log_level = logger.level
@@ -297,6 +298,7 @@ class LightRAG:
             "MilvusVectorDBStorge": MilvusVectorDBStorge,
             "ChromaVectorDBStorage": ChromaVectorDBStorage,
             "TiDBVectorDBStorage": TiDBVectorDBStorage,
+            "QdrantVectorDBStorage": QdrantVectorDBStorage,
             # graph storage
             "NetworkXStorage": NetworkXStorage,
             "Neo4JStorage": Neo4JStorage,
