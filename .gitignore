@@ -21,8 +21,9 @@ rag_storage
 venv/
 examples/input/
 examples/output/
-artifacts/*
+artifacts*/*
 !.gitkeep
 data/*
 .DS_Store
 *.ipynb
+29_ctx
