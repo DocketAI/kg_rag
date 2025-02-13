@@ -127,7 +127,9 @@ PROMPTS["entiti_continue_extraction"] = """Some entities were missed in the last
 PROMPTS["entiti_if_loop_extraction"] = """Check if some entities are still missing from the previous extraction. Answer YES or NO:
 """
 
-PROMPTS["fail_response"] = "Sorry, I'm not able to provide an answer to that question."
+PROMPTS["fail_response"] = (
+    "Sorry, I'm not able to provide an answer to that question.[no-context]"
+)
 
 PROMPTS["rag_response"] = """---Role---
 
@@ -149,13 +151,15 @@ When handling relationships with timestamps:
 3. Do not automatically prefer the most recently created relationships; use contextual judgment.
 4. For time-specific queries, prioritize temporal information in the content before considering creation timestamps.
 
+---Conversation History---
+{history}
+
+---Knowledge Base---
+{context_data}
+
 ---Target response length and format---
 
 {response_type}
-
----Data tables---
-
-{context_data}
 
 Add sections and commentary to the response as appropriate for the length and format.
 Avoid mentioning the use of data or sources explicitly in your responses. Instead, present the answer seamlessly and as naturally as possible.
@@ -164,19 +168,20 @@ Style the response in markdown, and refrain from providing any information not g
 
 PROMPTS["keywords_extraction"] = """---Role---
 
-You are a helpful assistant tasked with identifying both high-level and low-level keywords in the user's query.
+You are a helpful assistant tasked with identifying both high-level and low-level keywords in the user's query and conversation history.
 
 ---Goal---
-Given the query, list both high-level and low-level keywords. High-level keywords focus on overarching concepts or themes, while low-level keywords focus on specific entities, details, or concrete terms.
+
+Given the query and conversation history, list both high-level and low-level keywords. High-level keywords focus on overarching concepts or themes, while low-level keywords focus on specific entities, details, or concrete terms.
 
 ----Instructions----
 Evaluate the query to understand its intent and scope and extract high level and low level keywords that are highly relevant to the query.
 
-### Output Format:
-- Output the keywords in JSON format.
+- Consider both the current query and relevant conversation history when extracting keywords
+- Output the keywords in JSON format
 - The JSON should have two keys:
-  - "high_level_keywords" for overarching concepts or themes.
-  - "low_level_keywords" for specific entities or details.
+  - "high_level_keywords" for overarching concepts or themes
+  - "low_level_keywords" for specific entities or details
 
 ######################
 -Examples-
@@ -186,7 +191,10 @@ Evaluate the query to understand its intent and scope and extract high level and
 #############################
 -Real Data-
 ######################
-Query: {query}
+Conversation History:
+{history}
+
+Current Query: {query}
 ######################
 The `Output` should be human text, not unicode characters. Keep the same language as `Query`.
 Output:
@@ -252,14 +260,11 @@ Output:
 
 PROMPTS["naive_rag_response"] = """---Role---
 
-You are a helpful assistant responding to questions about documents provided.
-
+You are a helpful assistant responding to user query about Document Chunks provided below.
 
 ---Goal---
 
-Generate a response of the target length and format that responds to the user's question, summarizing all information in the input data tables appropriate for the response length and format, and incorporating any relevant general knowledge.
-If you don't know the answer, just say so. Do not make anything up.
-Do not include information where the supporting evidence for it is not provided.
+Generate a concise response based on Document Chunks and follow Response Rules, considering both the conversation history and the current query. Summarize all information in the provided Document Chunks, and incorporating general knowledge relevant to the Document Chunks. Do not include information not provided by Document Chunks.
 
 When handling content with timestamps:
 1. Each piece of content has a "created_at" timestamp indicating when we acquired this knowledge
@@ -267,16 +272,21 @@ When handling content with timestamps:
 3. Don't automatically prefer the most recent content - use judgment based on the context
 4. For time-specific queries, prioritize temporal information in the content before considering creation timestamps
 
----Target response length and format---
+---Conversation History---
+{history}
 
-{response_type}
-
----Documents---
-
+---Document Chunks---
 {content_data}
 
-Add sections and commentary to the response as appropriate for the length and format. Style the response in markdown.
-"""
+---Response Rules---
+
+- Target format and length: {response_type}
+- Use markdown formatting with appropriate section headings
+- Please respond in the same language as the user's question.
+- Ensure the response maintains continuity with the conversation history.
+- If you don't know the answer, just say so.
+- Do not include information not provided by the Document Chunks."""
+
 
 PROMPTS[
     "similarity_check"
@@ -285,9 +295,8 @@ PROMPTS[
 Question 1: {original_prompt}
 Question 2: {cached_prompt}
 
-Please evaluate the following two points and provide a similarity score between 0 and 1 directly:
-1. Whether these two questions are semantically similar
-2. Whether the answer to Question 2 can be used to answer Question 1
+Please evaluate whether these two questions are semantically similar, and whether the answer to Question 2 can be used to answer Question 1, provide a similarity score between 0 and 1 directly.
+
 Similarity score criteria:
 0: Completely unrelated or answer cannot be reused, including but not limited to:
    - The questions have different topics
@@ -310,26 +319,28 @@ beyond what is supported by the data tables.
 
 ---Goal---
 
+Generate a concise response based on Data Sources and follow Response Rules, considering both the conversation history and the current query. Data sources contain two parts: Knowledge Graph(KG) and Document Chunks(DC). Summarize all information in the provided Data Sources, and incorporating general knowledge relevant to the Data Sources. Do not include information not provided by Data Sources.
 Generate a response of the target length and format that accurately addresses the user's question. 
 Summarize all relevant information in the input data tables according to the requested response 
 length and format. Incorporate any pertinent general knowledge only if it directly supports 
 the provided data. If you don't know the answer from the context, say so without making anything up. 
 Omit any information that lacks supporting evidence in the data tables.
 
-When handling relationships with timestamps:
-1. Each relationship has a "created_at" timestamp indicating when we acquired this knowledge.
-2. If conflicting relationships exist, consider both the semantic content and the timestamp.
-3. Do not automatically prefer the most recently created relationships; use contextual judgment.
-4. For time-specific queries, prioritize temporal information in the content before considering creation timestamps.
+When handling information with timestamps:
+1. Each piece of information (both relationships and content) has a "created_at" timestamp indicating when we acquired this knowledge
+2. When encountering conflicting information, consider both the content/relationship and the timestamp
+3. Don't automatically prefer the most recent information - use judgment based on the context
+4. For time-specific queries, prioritize temporal information in the content before considering creation timestamps
 
----Target response length and format---
+---Conversation History---
+{history}
 
-{response_type}
+---Data Sources---
 
----Data tables---
-
+1. From Knowledge Graph(KG):
 {kg_context}
 
+2. From Document Chunks(DC):
 {vector_context}
 
 Add sections and commentary to the response as appropriate for the length and format.

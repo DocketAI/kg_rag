@@ -1,11 +1,20 @@
 import asyncio
-import asyncpg
 import sys
 import os
+import pipmaster as pm
 
+if not pm.is_installed("psycopg-pool"):
+    pm.install("psycopg-pool")
+    pm.install("psycopg[binary,pool]")
+if not pm.is_installed("asyncpg"):
+    pm.install("asyncpg")
+
+import asyncpg
 import psycopg
 from psycopg_pool import AsyncConnectionPool
-from lightrag.kg.postgres_impl import PostgreSQLDB, PGGraphStorage
+
+from ..kg.postgres_impl import PostgreSQLDB, PGGraphStorage
+from ..namespace import NameSpace
 
 DB = "rag"
 USER = "rag"
@@ -61,7 +70,7 @@ db = PostgreSQLDB(
         "port": 15432,
         "user": "rag",
         "password": "rag",
-        "database": "rag",
+        "database": "r1",
     }
 )
 
@@ -69,19 +78,23 @@ db = PostgreSQLDB(
 async def query_with_age():
     await db.initdb()
     graph = PGGraphStorage(
-        namespace="chunk_entity_relation",
+        namespace=NameSpace.GRAPH_STORE_CHUNK_ENTITY_RELATION,
         global_config={},
         embedding_func=None,
     )
     graph.db = db
-    res = await graph.get_node('"CHRISTMAS-TIME"')
+    res = await graph.get_node('"A CHRISTMAS CAROL"')
     print("Node is: ", res)
+    res = await graph.get_edge('"A CHRISTMAS CAROL"', "PROJECT GUTENBERG")
+    print("Edge is: ", res)
+    res = await graph.get_node_edges('"SCROOGE"')
+    print("Node Edges are: ", res)
 
 
 async def create_edge_with_age():
     await db.initdb()
     graph = PGGraphStorage(
-        namespace="chunk_entity_relation",
+        namespace=NameSpace.GRAPH_STORE_CHUNK_ENTITY_RELATION,
         global_config={},
         embedding_func=None,
     )

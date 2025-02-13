@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 
 from lightrag import LightRAG, QueryParam
 from lightrag.kg.postgres_impl import PostgreSQLDB
-from lightrag.llm import ollama_embedding, zhipu_complete
+from lightrag.llm.zhipu import zhipu_complete
+from lightrag.llm.ollama import ollama_embedding
 from lightrag.utils import EmbeddingFunc
 
 load_dotenv()
@@ -43,6 +44,7 @@ async def main():
         llm_model_name="glm-4-flashx",
         llm_model_max_async=4,
         llm_model_max_token_size=32768,
+        enable_llm_cache_for_entity_extract=True,
         embedding_func=EmbeddingFunc(
             embedding_dim=768,
             max_token_size=8192,

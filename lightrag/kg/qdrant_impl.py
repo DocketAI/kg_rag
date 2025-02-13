@@ -2,13 +2,19 @@ import asyncio
 import os
 from tqdm.asyncio import tqdm as tqdm_async
 from dataclasses import dataclass
-from qdrant_client import QdrantClient, models
 import numpy as np
 import hashlib
 import uuid
 
 from ..utils import logger
 from ..base import BaseVectorStorage
+
+import pipmaster as pm
+
+if not pm.is_installed("qdrant_client"):
+    pm.install("qdrant_client")
+
+from qdrant_client import QdrantClient, models
 
 
 def compute_mdhash_id_for_qdrant(
@@ -64,7 +70,6 @@ class QdrantVectorDBStorage(BaseVectorStorage):
         )
 
     async def upsert(self, data: dict[str, dict]):
-        logger.info(f"Inserting {len(data)} vectors to {self.namespace}")
         if not len(data):
             logger.warning("You insert an empty data to vector DB")
             return []
@@ -117,5 +122,4 @@ class QdrantVectorDBStorage(BaseVectorStorage):
             limit=top_k,
             with_payload=True,
         )
-        logger.debug(f"query result: {results}")
         return [{**dp.payload, "id": dp.id, "distance": dp.score} for dp in results]

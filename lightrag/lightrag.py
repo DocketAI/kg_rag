@@ -1,61 +1,71 @@
 import asyncio
 import os
-from tqdm.asyncio import tqdm as tqdm_async
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import partial
-from typing import Type, cast, Dict
+from typing import Any, Callable, Optional, Type, Union, cast
 from .chunks import get_docs, get_chunks
-
-from .llm import (
-    gpt_4o_mini_complete,
-    openai_embedding,
-)
-from .operate import (
-    chunking_by_token_size,
-    extract_entities,
-    # local_query,global_query,hybrid_query,
-    kg_query,
-    naive_query,
-    mix_kg_vector_query,
-)
-
-from .utils import (
-    EmbeddingFunc,
-    compute_mdhash_id,
-    limit_async_func_call,
-    convert_response_to_json,
-    logger,
-    set_logger,
-)
 from .base import (
     BaseGraphStorage,
     BaseKVStorage,
     BaseVectorStorage,
-    StorageNameSpace,
-    QueryParam,
+    DocProcessingStatus,
     DocStatus,
+    DocStatusStorage,
+    QueryParam,
+    StorageNameSpace,
 )
-
-from .storage import (
-    JsonKVStorage,
-    NanoVectorDBStorage,
-    NetworkXStorage,
-    JsonDocStatusStorage,
+from .namespace import NameSpace, make_namespace
+from .operate import (
+    chunking_by_token_size,
+    extract_entities,
+    extract_keywords_only,
+    kg_query,
+    kg_query_with_keywords,
+    mix_kg_vector_query,
+    naive_query,
 )
-
 from .prompt import GRAPH_FIELD_SEP
+from .utils import (
+    EmbeddingFunc,
+    compute_mdhash_id,
+    convert_response_to_json,
+    limit_async_func_call,
+    logger,
+    set_logger,
+)
 
-# future KG integrations
-
-# from .kg.ArangoDB_impl import (
-#     GraphStorage as ArangoDBStorage
-# )
+STORAGES = {
+    "NetworkXStorage": ".kg.networkx_impl",
+    "JsonKVStorage": ".kg.json_kv_impl",
+    "NanoVectorDBStorage": ".kg.nano_vector_db_impl",
+    "JsonDocStatusStorage": ".kg.jsondocstatus_impl",
+    "Neo4JStorage": ".kg.neo4j_impl",
+    "OracleKVStorage": ".kg.oracle_impl",
+    "OracleGraphStorage": ".kg.oracle_impl",
+    "OracleVectorDBStorage": ".kg.oracle_impl",
+    "MilvusVectorDBStorge": ".kg.milvus_impl",
+    "MongoKVStorage": ".kg.mongo_impl",
+    "MongoDocStatusStorage": ".kg.mongo_impl",
+    "MongoGraphStorage": ".kg.mongo_impl",
+    "RedisKVStorage": ".kg.redis_impl",
+    "ChromaVectorDBStorage": ".kg.chroma_impl",
+    "TiDBKVStorage": ".kg.tidb_impl",
+    "TiDBVectorDBStorage": ".kg.tidb_impl",
+    "TiDBGraphStorage": ".kg.tidb_impl",
+    "PGKVStorage": ".kg.postgres_impl",
+    "PGVectorStorage": ".kg.postgres_impl",
+    "AGEStorage": ".kg.age_impl",
+    "PGGraphStorage": ".kg.postgres_impl",
+    "GremlinStorage": ".kg.gremlin_impl",
+    "PGDocStatusStorage": ".kg.postgres_impl",
+    "FaissVectorDBStorage": ".kg.faiss_impl",
+    "QdrantVectorDBStorage": ".kg.qdrant_impl",
+}
 
 
 def lazy_external_import(module_name: str, class_name: str):
     """Lazily import a class from an external module based on the package of the caller."""
-
     # Get the caller's module and package
     import inspect
 
@@ -66,33 +76,11 @@ def lazy_external_import(module_name: str, class_name: str):
     def import_class(*args, **kwargs):
         import importlib
 
-        # Import the module using importlib
         module = importlib.import_module(module_name, package=package)
-
-        # Get the class from the module and instantiate it
         cls = getattr(module, class_name)
         return cls(*args, **kwargs)
 
     return import_class
-
-
-Neo4JStorage = lazy_external_import(".kg.neo4j_impl", "Neo4JStorage")
-OracleKVStorage = lazy_external_import(".kg.oracle_impl", "OracleKVStorage")
-OracleGraphStorage = lazy_external_import(".kg.oracle_impl", "OracleGraphStorage")
-OracleVectorDBStorage = lazy_external_import(".kg.oracle_impl", "OracleVectorDBStorage")
-MilvusVectorDBStorge = lazy_external_import(".kg.milvus_impl", "MilvusVectorDBStorge")
-MongoKVStorage = lazy_external_import(".kg.mongo_impl", "MongoKVStorage")
-ChromaVectorDBStorage = lazy_external_import(".kg.chroma_impl", "ChromaVectorDBStorage")
-TiDBKVStorage = lazy_external_import(".kg.tidb_impl", "TiDBKVStorage")
-TiDBVectorDBStorage = lazy_external_import(".kg.tidb_impl", "TiDBVectorDBStorage")
-TiDBGraphStorage = lazy_external_import(".kg.tidb_impl", "TiDBGraphStorage")
-PGKVStorage = lazy_external_import(".kg.postgres_impl", "PGKVStorage")
-PGVectorStorage = lazy_external_import(".kg.postgres_impl", "PGVectorStorage")
-AGEStorage = lazy_external_import(".kg.age_impl", "AGEStorage")
-PGGraphStorage = lazy_external_import(".kg.postgres_impl", "PGGraphStorage")
-GremlinStorage = lazy_external_import(".kg.gremlin_impl", "GremlinStorage")
-PGDocStatusStorage = lazy_external_import(".kg.postgres_impl", "PGDocStatusStorage")
-QdrantVectorDBStorage = lazy_external_import(".kg.qdrant_impl", "QdrantVectorDBStorage")
 
 
 def always_get_an_event_loop() -> asyncio.AbstractEventLoop:
@@ -122,36 +110,65 @@ def always_get_an_event_loop() -> asyncio.AbstractEventLoop:
 
 @dataclass
 class LightRAG:
+    """LightRAG: Simple and Fast Retrieval-Augmented Generation."""
+
     working_dir: str = field(
-        default_factory=lambda: f"./lightrag_cache_{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}"
+        default_factory=lambda: f'./lightrag_cache_{datetime.now().strftime("%Y-%m-%d-%H:%M:%S")}'
     )
-    # Default not to use embedding cache
-    embedding_cache_config: dict = field(
+    """Directory where cache and temporary files are stored."""
+
+    embedding_cache_config: dict[str, Any] = field(
         default_factory=lambda: {
             "enabled": False,
             "similarity_threshold": 0.95,
             "use_llm_check": False,
         }
     )
+    """Configuration for embedding cache.
+    - enabled: If True, enables caching to avoid redundant computations.
+    - similarity_threshold: Minimum similarity score to use cached embeddings.
+    - use_llm_check: If True, validates cached embeddings using an LLM.
+    """
+
     kv_storage: str = field(default="JsonKVStorage")
+    """Storage backend for key-value data."""
+
     vector_storage: str = field(default="QdrantVectorDBStorage")
+    """Storage backend for vector embeddings."""
+
     graph_storage: str = field(default="NetworkXStorage")
+    """Storage backend for knowledge graphs."""
 
+    # Logging
     current_log_level = logger.level
-    log_level: str = field(default=current_log_level)
+    log_level: int = field(default=current_log_level)
+    """Logging level for the system (e.g., 'DEBUG', 'INFO', 'WARNING')."""
 
-    # text chunking
+    log_dir: str = field(default=os.getcwd())
+    """Directory where logs are stored. Defaults to the current working directory."""
+
+    # Text chunking
     chunk_token_size: int = 1200
+    """Maximum number of tokens per text chunk when splitting documents."""
+
     chunk_overlap_token_size: int = 100
+    """Number of overlapping tokens between consecutive text chunks to preserve context."""
+
     tiktoken_model_name: str = "gpt-4o"
+    """Model name used for tokenization when chunking text."""
 
-    # entity extraction
+    # Entity extraction
     entity_extract_max_gleaning: int = 1
-    entity_summary_to_max_tokens: int = 500
+    """Maximum number of entity extraction attempts for ambiguous content."""
 
-    # node embedding
+    entity_summary_to_max_tokens: int = 500
+    """Maximum number of tokens used for summarizing extracted entities."""
+
+    # Node embedding
     node_embedding_algorithm: str = "node2vec"
-    node2vec_params: dict = field(
+    """Algorithm used for node embedding in knowledge graphs."""
+
+    node2vec_params: dict[str, int] = field(
         default_factory=lambda: {
             "dimensions": 1536,
             "num_walks": 10,
@@ -161,83 +178,154 @@ class LightRAG:
             "random_seed": 3,
         }
     )
+    """Configuration for the node2vec embedding algorithm:
+    - dimensions: Number of dimensions for embeddings.
+    - num_walks: Number of random walks per node.
+    - walk_length: Number of steps per random walk.
+    - window_size: Context window size for training.
+    - iterations: Number of iterations for training.
+    - random_seed: Seed value for reproducibility.
+    """
 
-    # embedding_func: EmbeddingFunc = field(default_factory=lambda:hf_embedding)
-    embedding_func: EmbeddingFunc = field(default_factory=lambda: openai_embedding)
+    embedding_func: EmbeddingFunc = None
+    """Function for computing text embeddings. Must be set before use."""
+
     embedding_batch_num: int = 32
+    """Batch size for embedding computations."""
+
     embedding_func_max_async: int = 16
+    """Maximum number of concurrent embedding function calls."""
 
-    # LLM
-    llm_model_func: callable = gpt_4o_mini_complete  # hf_model_complete#
-    llm_model_name: str = "meta-llama/Llama-3.2-1B-Instruct"  #'meta-llama/Llama-3.2-1B'#'google/gemma-2-2b-it'
-    llm_model_max_token_size: int = 32768
-    llm_model_max_async: int = 16
-    llm_model_kwargs: dict = field(default_factory=dict)
+    # LLM Configuration
+    llm_model_func: callable = None
+    """Function for interacting with the large language model (LLM). Must be set before use."""
 
-    # storage
-    vector_db_storage_cls_kwargs: dict = field(default_factory=dict)
+    llm_model_name: str = "meta-llama/Llama-3.2-1B-Instruct"
+    """Name of the LLM model used for generating responses."""
+
+    llm_model_max_token_size: int = int(os.getenv("MAX_TOKENS", "32768"))
+    """Maximum number of tokens allowed per LLM response."""
+
+    llm_model_max_async: int = int(os.getenv("MAX_ASYNC", "16"))
+    """Maximum number of concurrent LLM calls."""
+
+    llm_model_kwargs: dict[str, Any] = field(default_factory=dict)
+    """Additional keyword arguments passed to the LLM model function."""
+
+    # Storage
+    vector_db_storage_cls_kwargs: dict[str, Any] = field(default_factory=dict)
+    """Additional parameters for vector database storage."""
+
+    namespace_prefix: str = field(default="")
+    """Prefix for namespacing stored data across different environments."""
 
     enable_llm_cache: bool = True
+    """Enables caching for LLM responses to avoid redundant computations."""
+
+    enable_llm_cache_for_entity_extract: bool = True
+    """If True, enables caching for entity extraction steps to reduce LLM costs."""
+
+    # Extensions
+    addon_params: dict[str, Any] = field(default_factory=dict)
+    """Dictionary for additional parameters and extensions."""
 
     # extension
-    addon_params: dict = field(default_factory=dict)
-    convert_response_to_json_func: callable = convert_response_to_json
+    addon_params: dict[str, Any] = field(default_factory=dict)
+    convert_response_to_json_func: Callable[[str], dict[str, Any]] = (
+        convert_response_to_json
+    )
 
-    # Add new field for document status storage type
     doc_status_storage: str = field(default="JsonDocStatusStorage")
+    """Storage type for tracking document processing statuses."""
+
+    # Custom Chunking Function
+    chunking_func: Callable[
+        [
+            str,
+            Optional[str],
+            bool,
+            int,
+            int,
+            str,
+        ],
+        list[dict[str, Any]],
+    ] = chunking_by_token_size
 
     def __post_init__(self):
-        log_file = os.path.join("lightrag.log")
+        os.makedirs(self.log_dir, exist_ok=True)
+        log_file = os.path.join(self.log_dir, "lightrag.log")
         set_logger(log_file)
+
         logger.setLevel(self.log_level)
-
         logger.info(f"Logger initialized for working directory: {self.working_dir}")
-
-        _print_config = ",\n  ".join([f"{k} = {v}" for k, v in asdict(self).items()])
-        logger.debug(f"LightRAG init with param:\n  {_print_config}\n")
-
-        # @TODO: should move all storage setup here to leverage initial start params attached to self.
-
-        self.key_string_value_json_storage_cls: Type[BaseKVStorage] = (
-            self._get_storage_class()[self.kv_storage]
-        )
-        self.vector_db_storage_cls: Type[BaseVectorStorage] = self._get_storage_class()[
-            self.vector_storage
-        ]
-        self.graph_storage_cls: Type[BaseGraphStorage] = self._get_storage_class()[
-            self.graph_storage
-        ]
-
         if not os.path.exists(self.working_dir):
             logger.info(f"Creating working directory {self.working_dir}")
             os.makedirs(self.working_dir)
 
-        self.llm_response_cache = self.key_string_value_json_storage_cls(
-            namespace="llm_response_cache",
-            global_config=asdict(self),
+        # show config
+        global_config = asdict(self)
+        _print_config = ",\n  ".join([f"{k} = {v}" for k, v in global_config.items()])
+        logger.debug(f"LightRAG init with param:\n  {_print_config}\n")
+
+        # Init LLM
+        self.embedding_func = limit_async_func_call(self.embedding_func_max_async)(
+            self.embedding_func
+        )
+
+        # Initialize all storages
+        self.key_string_value_json_storage_cls: Type[BaseKVStorage] = (
+            self._get_storage_class(self.kv_storage)
+        )
+        self.vector_db_storage_cls: Type[BaseVectorStorage] = self._get_storage_class(
+            self.vector_storage
+        )
+        self.graph_storage_cls: Type[BaseGraphStorage] = self._get_storage_class(
+            self.graph_storage
+        )
+
+        self.key_string_value_json_storage_cls = partial(
+            self.key_string_value_json_storage_cls, global_config=global_config
+        )
+
+        self.vector_db_storage_cls = partial(
+            self.vector_db_storage_cls, global_config=global_config
+        )
+
+        self.graph_storage_cls = partial(
+            self.graph_storage_cls, global_config=global_config
+        )
+
+        self.json_doc_status_storage = self.key_string_value_json_storage_cls(
+            namespace=self.namespace_prefix + "json_doc_status_storage",
             embedding_func=None,
         )
 
-        self.embedding_func = limit_async_func_call(self.embedding_func_max_async)(
-            self.embedding_func
+        self.llm_response_cache = self.key_string_value_json_storage_cls(
+            namespace=make_namespace(
+                self.namespace_prefix, NameSpace.KV_STORE_LLM_RESPONSE_CACHE
+            ),
+            embedding_func=self.embedding_func,
         )
 
         ####
         # add embedding func by walter
         ####
-        self.full_docs = self.key_string_value_json_storage_cls(
-            namespace="full_docs",
-            global_config=asdict(self),
+        self.full_docs: BaseKVStorage = self.key_string_value_json_storage_cls(
+            namespace=make_namespace(
+                self.namespace_prefix, NameSpace.KV_STORE_FULL_DOCS
+            ),
             embedding_func=self.embedding_func,
         )
-        self.text_chunks = self.key_string_value_json_storage_cls(
-            namespace="text_chunks",
-            global_config=asdict(self),
+        self.text_chunks: BaseKVStorage = self.key_string_value_json_storage_cls(
+            namespace=make_namespace(
+                self.namespace_prefix, NameSpace.KV_STORE_TEXT_CHUNKS
+            ),
             embedding_func=self.embedding_func,
         )
-        self.chunk_entity_relation_graph = self.graph_storage_cls(
-            namespace="chunk_entity_relation",
-            global_config=asdict(self),
+        self.chunk_entity_relation_graph: BaseGraphStorage = self.graph_storage_cls(
+            namespace=make_namespace(
+                self.namespace_prefix, NameSpace.GRAPH_STORE_CHUNK_ENTITY_RELATION
+            ),
             embedding_func=self.embedding_func,
         )
         ####
@@ -245,89 +333,200 @@ class LightRAG:
         ####
 
         self.entities_vdb = self.vector_db_storage_cls(
-            namespace="entities",
-            global_config=asdict(self),
+            namespace=make_namespace(
+                self.namespace_prefix, NameSpace.VECTOR_STORE_ENTITIES
+            ),
             embedding_func=self.embedding_func,
             meta_fields={"entity_name"},
         )
         self.relationships_vdb = self.vector_db_storage_cls(
-            namespace="relationships",
-            global_config=asdict(self),
+            namespace=make_namespace(
+                self.namespace_prefix, NameSpace.VECTOR_STORE_RELATIONSHIPS
+            ),
             embedding_func=self.embedding_func,
             meta_fields={"src_id", "tgt_id"},
         )
-        self.chunks_vdb = self.vector_db_storage_cls(
-            namespace="chunks",
-            global_config=asdict(self),
+        self.chunks_vdb: BaseVectorStorage = self.vector_db_storage_cls(
+            namespace=make_namespace(
+                self.namespace_prefix, NameSpace.VECTOR_STORE_CHUNKS
+            ),
             embedding_func=self.embedding_func,
         )
+
+        if self.llm_response_cache and hasattr(
+            self.llm_response_cache, "global_config"
+        ):
+            hashing_kv = self.llm_response_cache
+        else:
+            hashing_kv = self.key_string_value_json_storage_cls(
+                namespace=make_namespace(
+                    self.namespace_prefix, NameSpace.KV_STORE_LLM_RESPONSE_CACHE
+                ),
+                embedding_func=self.embedding_func,
+            )
 
         self.llm_model_func = limit_async_func_call(self.llm_model_max_async)(
             partial(
                 self.llm_model_func,
-                hashing_kv=self.llm_response_cache
-                if self.llm_response_cache
-                and hasattr(self.llm_response_cache, "global_config")
-                else self.key_string_value_json_storage_cls(
-                    namespace="llm_response_cache",
-                    global_config=asdict(self),
-                    embedding_func=None,
-                ),
+                hashing_kv=hashing_kv,
                 **self.llm_model_kwargs,
             )
         )
 
         # Initialize document status storage
-        self.doc_status_storage_cls = self._get_storage_class()[self.doc_status_storage]
-        self.doc_status = self.doc_status_storage_cls(
-            namespace="doc_status",
-            global_config=asdict(self),
+        self.doc_status_storage_cls = self._get_storage_class(self.doc_status_storage)
+        self.doc_status: DocStatusStorage = self.doc_status_storage_cls(
+            namespace=make_namespace(self.namespace_prefix, NameSpace.DOC_STATUS),
+            global_config=global_config,
             embedding_func=None,
         )
 
-    def _get_storage_class(self) -> dict:
-        return {
-            # kv storage
-            "JsonKVStorage": JsonKVStorage,
-            "OracleKVStorage": OracleKVStorage,
-            "MongoKVStorage": MongoKVStorage,
-            "TiDBKVStorage": TiDBKVStorage,
-            # vector storage
-            "NanoVectorDBStorage": NanoVectorDBStorage,
-            "OracleVectorDBStorage": OracleVectorDBStorage,
-            "MilvusVectorDBStorge": MilvusVectorDBStorge,
-            "ChromaVectorDBStorage": ChromaVectorDBStorage,
-            "TiDBVectorDBStorage": TiDBVectorDBStorage,
-            "QdrantVectorDBStorage": QdrantVectorDBStorage,
-            # graph storage
-            "NetworkXStorage": NetworkXStorage,
-            "Neo4JStorage": Neo4JStorage,
-            "OracleGraphStorage": OracleGraphStorage,
-            "AGEStorage": AGEStorage,
-            "PGGraphStorage": PGGraphStorage,
-            "PGKVStorage": PGKVStorage,
-            "PGDocStatusStorage": PGDocStatusStorage,
-            "PGVectorStorage": PGVectorStorage,
-            "TiDBGraphStorage": TiDBGraphStorage,
-            "GremlinStorage": GremlinStorage,
-            # "ArangoDBStorage": ArangoDBStorage
-            "JsonDocStatusStorage": JsonDocStatusStorage,
-        }
+    async def get_graph_labels(self):
+        text = await self.chunk_entity_relation_graph.get_all_labels()
+        return text
 
-    def insert(self):
-        loop = always_get_an_event_loop()
-        return loop.run_until_complete(self.ainsert())
+    async def get_graps(self, nodel_label: str, max_depth: int):
+        return await self.chunk_entity_relation_graph.get_knowledge_graph(
+            node_label=nodel_label, max_depth=max_depth
+        )
 
-    async def ainsert(self):
-        """Insert documents with checkpoint support
+    def _get_storage_class(self, storage_name: str) -> dict:
+        import_path = STORAGES[storage_name]
+        storage_class = lazy_external_import(import_path, storage_name)
+        return storage_class
+
+    def set_storage_client(self, db_client):
+        # Now only tested on Oracle Database
+        for storage in [
+            self.vector_db_storage_cls,
+            self.graph_storage_cls,
+            self.doc_status,
+            self.full_docs,
+            self.text_chunks,
+            self.llm_response_cache,
+            self.key_string_value_json_storage_cls,
+            self.chunks_vdb,
+            self.relationships_vdb,
+            self.entities_vdb,
+            self.graph_storage_cls,
+            self.chunk_entity_relation_graph,
+            self.llm_response_cache,
+        ]:
+            # set client
+            storage.db = db_client
+
+    def insert(
+        self,
+        string_or_strings: Union[str, list[str]],
+        split_by_character: str | None = None,
+        split_by_character_only: bool = False,
+    ):
+        """Sync Insert documents with checkpoint support
 
         Args:
-            company_id: company id
+            string_or_strings: Single document string or list of document strings
+            split_by_character: if split_by_character is not None, split the string by character, if chunk longer than
+            chunk_size, split the sub chunk by token size.
+            split_by_character_only: if split_by_character_only is True, split the string by character only, when
+            split_by_character is None, this parameter is ignored.
+        """
+        loop = always_get_an_event_loop()
+        return loop.run_until_complete(
+            self.ainsert(string_or_strings, split_by_character, split_by_character_only)
+        )
+
+    async def ainsert(
+        self,
+        string_or_strings: Union[str, list[str]],
+        split_by_character: str | None = None,
+        split_by_character_only: bool = False,
+    ):
+        """Async Insert documents with checkpoint support
+
+        Args:
+            string_or_strings: Single document string or list of document strings
+            split_by_character: if split_by_character is not None, split the string by character, if chunk longer than
+            chunk_size, split the sub chunk by token size.
+            split_by_character_only: if split_by_character_only is True, split the string by character only, when
+            split_by_character is None, this parameter is ignored.
+        """
+        await self.apipeline_enqueue_documents(string_or_strings)
+        await self.apipeline_process_enqueue_documents(
+            split_by_character, split_by_character_only
+        )
+
+    def insert_custom_chunks(self, full_text: str, text_chunks: list[str]):
+        loop = always_get_an_event_loop()
+        return loop.run_until_complete(
+            self.ainsert_custom_chunks(full_text, text_chunks)
+        )
+
+    async def ainsert_custom_chunks(self, full_text: str, text_chunks: list[str]):
+        update_storage = False
+        try:
+            doc_key = compute_mdhash_id(full_text.strip(), prefix="doc-")
+            new_docs = {doc_key: {"content": full_text.strip()}}
+
+            _add_doc_keys = await self.full_docs.filter_keys(set(doc_key))
+            new_docs = {k: v for k, v in new_docs.items() if k in _add_doc_keys}
+            if not len(new_docs):
+                logger.warning("This document is already in the storage.")
+                return
+
+            update_storage = True
+            logger.info(f"[New Docs] inserting {len(new_docs)} docs")
+
+            inserting_chunks: dict[str, Any] = {}
+            for chunk_text in text_chunks:
+                chunk_text_stripped = chunk_text.strip()
+                chunk_key = compute_mdhash_id(chunk_text_stripped, prefix="chunk-")
+
+                inserting_chunks[chunk_key] = {
+                    "content": chunk_text_stripped,
+                    "full_doc_id": doc_key,
+                }
+
+            doc_ids = set(inserting_chunks.keys())
+            add_chunk_keys = await self.text_chunks.filter_keys(doc_ids)
+            inserting_chunks = {
+                k: v for k, v in inserting_chunks.items() if k in add_chunk_keys
+            }
+            if not len(inserting_chunks):
+                logger.warning("All chunks are already in the storage.")
+                return
+
+            tasks = [
+                self.chunks_vdb.upsert(inserting_chunks),
+                self._process_entity_relation_graph(inserting_chunks),
+                self.full_docs.upsert(new_docs),
+                self.text_chunks.upsert(inserting_chunks),
+            ]
+            await asyncio.gather(*tasks)
+
+        finally:
+            if update_storage:
+                await self._insert_done()
+
+    async def apipeline_enqueue_documents(self, string_or_strings: str | list[str]):
+        """
+        Pipeline for Processing Documents
+
+        1. Remove duplicate contents from the list
+        2. Generate document IDs and initial status
+        3. Filter out already processed documents
+        4. Enqueue document in status
         """
         docs = await get_docs(self.addon_params.get("company_id"), self.addon_params.get("env"))
 
-        new_docs = {
-            doc_id: {
+        # 1. Remove duplicate contents from the list
+        unique_contents = list(set(doc.strip() for doc in string_or_strings))
+
+        # 2. Generate document IDs and initial status
+        new_docs: dict[str, Any] = {
+            compute_mdhash_id(content, prefix="doc-"): {
+                "content": content,
+                "content_summary": self._get_content_summary(content),
+                "content_length": len(content),
                 "status": DocStatus.PENDING,
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat(),
@@ -335,101 +534,156 @@ class LightRAG:
             for doc_id in docs
         }
 
-        _add_doc_keys = await self.doc_status.filter_keys(list(map(str, new_docs.keys())))
-        new_docs = {k: v for k, v in new_docs.items() if k in set(map(int, _add_doc_keys))}
+        # 3. Filter out already processed documents
+        # Get docs ids
+        all_new_doc_ids = set(new_docs.keys())
+        # Exclude IDs of documents that are already in progress
+        unique_new_doc_ids = await self.doc_status.filter_keys(all_new_doc_ids)
+        # Filter new_docs to only include documents with unique IDs
+        new_docs = {doc_id: new_docs[doc_id] for doc_id in unique_new_doc_ids}
 
         if not new_docs:
+            logger.info("No new unique documents were found.")
+            return
+
+        # 4. Store status document
+        await self.doc_status.upsert(new_docs)
+        logger.info(f"Stored {len(new_docs)} new unique documents")
+
+    async def apipeline_process_enqueue_documents(
+        self,
+        split_by_character: str | None = None,
+        split_by_character_only: bool = False,
+    ) -> None:
+        """
+        Process pending documents by splitting them into chunks, processing
+        each chunk for entity and relation extraction, and updating the
+        document status.
+
+        1. Get all pending, failed, and abnormally terminated processing documents.
+        2. Split document content into chunks
+        3. Process each chunk for entity and relation extraction
+        4. Update the document status
+        """
+        # 1. Get all pending, failed, and abnormally terminated processing documents.
+        to_process_docs: dict[str, DocProcessingStatus] = {}
+
+        processing_docs = await self.doc_status.get_processing_docs()
+        to_process_docs.update(processing_docs)
+        failed_docs = await self.doc_status.get_failed_docs()
+        to_process_docs.update(failed_docs)
+        pendings_docs = await self.doc_status.get_pending_docs()
+        to_process_docs.update(pendings_docs)
+
+        if not to_process_docs:
             logger.info("All documents have been processed or are duplicates")
             return
 
-        logger.info(f"Processing {len(new_docs)} new unique documents")
-
-        # Process documents in batches
+        # 2. split docs into chunks, insert chunks, update doc status
         batch_size = self.addon_params.get("insert_batch_size", 10)
-        for i in range(0, len(new_docs), batch_size):
-            batch_docs = dict(list(new_docs.items())[i : i + batch_size])
-            tasks = []
-            for doc_id, doc in tqdm_async(
-                batch_docs.items(), desc=f"Processing batch {i//batch_size + 1}"
-            ):
-                tasks.append(self._ainsert_doc(doc_id, doc))
-            await asyncio.gather(*tasks)
+        docs_batches = [
+            list(to_process_docs.items())[i : i + batch_size]
+            for i in range(0, len(to_process_docs), batch_size)
+        ]
 
-    async def _ainsert_doc(self, doc_id, doc):
-        try:
-            # Update status to processing
-            print(f"processing doc {doc_id}")
-            doc_status = {
-                "status": DocStatus.PROCESSING,
-                "created_at": doc["created_at"],
-                "updated_at": datetime.now().isoformat(),
-            }
-            await self.doc_status.upsert({doc_id: doc_status})
+        logger.info(f"Number of batches to process: {len(docs_batches)}.")
 
-            # Generate chunks from document
-            chunks = await get_chunks(doc_id, self.addon_params.get("min_chunk_tokens", 1200), self.addon_params.get("company_id"), self.addon_params.get("env"))
-
-            # Update status with chunks information
-            doc_status.update(
-                {
-                    "chunks_count": len(chunks),
-                    "updated_at": datetime.now().isoformat(),
-                }
-            )
-            await self.doc_status.upsert({doc_id: doc_status})
-
-            try:
-                # Store chunks in vector database
-                await self.chunks_vdb.upsert(chunks)
-
-                # Extract and store entities and relationships
-                maybe_new_kg = await extract_entities(
-                    chunks,
-                    knowledge_graph_inst=self.chunk_entity_relation_graph,
-                    entity_vdb=self.entities_vdb,
-                    relationships_vdb=self.relationships_vdb,
-                    global_config=asdict(self),
+        # 3. iterate over batches
+        for batch_idx, docs_batch in enumerate(docs_batches):
+            # 4. iterate over batch
+            for doc_id_processing_status in docs_batch:
+                doc_id, status_doc = doc_id_processing_status
+                # Update status in processing
+                doc_status_id = compute_mdhash_id(status_doc.content, prefix="doc-")
+                await self.doc_status.upsert(
+                    {
+                        doc_status_id: {
+                            "status": DocStatus.PROCESSING,
+                            "updated_at": datetime.now().isoformat(),
+                            "content": status_doc.content,
+                            "content_summary": status_doc.content_summary,
+                            "content_length": status_doc.content_length,
+                            "created_at": status_doc.created_at,
+                        }
+                    }
                 )
-
-                if maybe_new_kg is None:
-                    raise Exception(
-                        "Failed to extract entities and relationships"
+                # Generate chunks from document
+                chunks: dict[str, Any] = {
+                    compute_mdhash_id(dp["content"], prefix="chunk-"): {
+                        **dp,
+                        "full_doc_id": doc_id,
+                    }
+                    for dp in self.chunking_func(
+                        status_doc.content,
+                        split_by_character,
+                        split_by_character_only,
+                        self.chunk_overlap_token_size,
+                        self.chunk_token_size,
+                        self.tiktoken_model_name,
                     )
+                }
 
-                self.chunk_entity_relation_graph = maybe_new_kg
+                # Process document (text chunks and full docs) in parallel
+                tasks = [
+                    self.chunks_vdb.upsert(chunks),
+                    self._process_entity_relation_graph(chunks),
+                    self.full_docs.upsert({doc_id: {"content": status_doc.content}}),
+                    self.text_chunks.upsert(chunks),
+                ]
+                try:
+                    await asyncio.gather(*tasks)
+                    await self.doc_status.update_doc_status(
+                        {
+                            doc_status_id: {
+                                "status": DocStatus.PROCESSED,
+                                "chunks_count": len(chunks),
+                                "content": status_doc.content,
+                                "content_summary": status_doc.content_summary,
+                                "content_length": status_doc.content_length,
+                                "created_at": status_doc.created_at,
+                                "updated_at": datetime.now().isoformat(),
+                            }
+                        }
+                    )
+                    await self._insert_done()
 
-                await self.text_chunks.upsert(chunks)
+                except Exception as e:
+                    logger.error(f"Failed to process document {doc_id}: {str(e)}")
+                    await self.doc_status.update_doc_status(
+                        {
+                            doc_status_id: {
+                                "status": DocStatus.FAILED,
+                                "error": str(e),
+                                "content": status_doc.content,
+                                "content_summary": status_doc.content_summary,
+                                "content_length": status_doc.content_length,
+                                "created_at": status_doc.created_at,
+                                "updated_at": datetime.now().isoformat(),
+                            }
+                        }
+                    )
+                    continue
+            logger.info(f"Completed batch {batch_idx + 1} of {len(docs_batches)}.")
 
-                # Update status to processed
-                doc_status.update(
-                    {
-                        "status": DocStatus.PROCESSED,
-                        "updated_at": datetime.now().isoformat(),
-                    }
-                )
-                await self.doc_status.upsert({doc_id: doc_status})
-
-            except Exception as e:
-                # Mark as failed if any step fails
-                doc_status.update(
-                    {
-                        "status": DocStatus.FAILED,
-                        "error": str(e),
-                        "updated_at": datetime.now().isoformat(),
-                    }
-                )
-                await self.doc_status.upsert({doc_id: doc_status})
-                raise e
+    async def _process_entity_relation_graph(self, chunk: dict[str, Any]) -> None:
+        try:
+            new_kg = await extract_entities(
+                chunk,
+                knowledge_graph_inst=self.chunk_entity_relation_graph,
+                entity_vdb=self.entities_vdb,
+                relationships_vdb=self.relationships_vdb,
+                llm_response_cache=self.llm_response_cache,
+                global_config=asdict(self),
+            )
+            if new_kg is None:
+                logger.info("No new entities or relationships extracted.")
+            else:
+                logger.info("New entities or relationships extracted.")
+                self.chunk_entity_relation_graph = new_kg
 
         except Exception as e:
-            import traceback
-
-            error_msg = f"Failed to process document {doc_id}: {str(e)}\n{traceback.format_exc()}"
-            logger.error(error_msg)
-
-        finally:
-            # Ensure all indexes are updated after each document
-            await self._insert_done()
+            logger.error("Failed to extract entities and relationships")
+            raise e
 
     async def _insert_done(self):
         tasks = []
@@ -585,11 +839,13 @@ class LightRAG:
             if update_storage:
                 await self._insert_done()
 
-    def query(self, query: str, param: QueryParam = QueryParam()):
+    def query(self, query: str, prompt: str = "", param: QueryParam = QueryParam()):
         loop = always_get_an_event_loop()
-        return loop.run_until_complete(self.aquery(query, param))
+        return loop.run_until_complete(self.aquery(query, prompt, param))
 
-    async def aquery(self, query: str, param: QueryParam = QueryParam()):
+    async def aquery(
+        self, query: str, prompt: str = "", param: QueryParam = QueryParam()
+    ):
         if param.mode in ["local", "global", "hybrid"]:
             response = await kg_query(
                 query,
@@ -603,10 +859,13 @@ class LightRAG:
                 if self.llm_response_cache
                 and hasattr(self.llm_response_cache, "global_config")
                 else self.key_string_value_json_storage_cls(
-                    namespace="llm_response_cache",
+                    namespace=make_namespace(
+                        self.namespace_prefix, NameSpace.KV_STORE_LLM_RESPONSE_CACHE
+                    ),
                     global_config=asdict(self),
-                    embedding_func=None,
+                    embedding_func=self.embedding_func,
                 ),
+                prompt=prompt,
             )
         elif param.mode == "naive":
             response = await naive_query(
@@ -619,9 +878,11 @@ class LightRAG:
                 if self.llm_response_cache
                 and hasattr(self.llm_response_cache, "global_config")
                 else self.key_string_value_json_storage_cls(
-                    namespace="llm_response_cache",
+                    namespace=make_namespace(
+                        self.namespace_prefix, NameSpace.KV_STORE_LLM_RESPONSE_CACHE
+                    ),
                     global_config=asdict(self),
-                    embedding_func=None,
+                    embedding_func=self.embedding_func,
                 ),
             )
         elif param.mode == "mix":
@@ -638,13 +899,129 @@ class LightRAG:
                 if self.llm_response_cache
                 and hasattr(self.llm_response_cache, "global_config")
                 else self.key_string_value_json_storage_cls(
-                    namespace="llm_response_cache",
+                    namespace=make_namespace(
+                        self.namespace_prefix, NameSpace.KV_STORE_LLM_RESPONSE_CACHE
+                    ),
                     global_config=asdict(self),
-                    embedding_func=None,
+                    embedding_func=self.embedding_func,
                 ),
             )
         else:
             raise ValueError(f"Unknown mode {param.mode}")
+        await self._query_done()
+        return response
+
+    def query_with_separate_keyword_extraction(
+        self, query: str, prompt: str, param: QueryParam = QueryParam()
+    ):
+        """
+        1. Extract keywords from the 'query' using new function in operate.py.
+        2. Then run the standard aquery() flow with the final prompt (formatted_question).
+        """
+        loop = always_get_an_event_loop()
+        return loop.run_until_complete(
+            self.aquery_with_separate_keyword_extraction(query, prompt, param)
+        )
+
+    async def aquery_with_separate_keyword_extraction(
+        self, query: str, prompt: str, param: QueryParam = QueryParam()
+    ):
+        """
+        1. Calls extract_keywords_only to get HL/LL keywords from 'query'.
+        2. Then calls kg_query(...) or naive_query(...), etc. as the main query, while also injecting the newly extracted keywords if needed.
+        """
+        # ---------------------
+        # STEP 1: Keyword Extraction
+        # ---------------------
+        # We'll assume 'extract_keywords_only(...)' returns (hl_keywords, ll_keywords).
+        hl_keywords, ll_keywords = await extract_keywords_only(
+            text=query,
+            param=param,
+            global_config=asdict(self),
+            hashing_kv=self.llm_response_cache
+            or self.key_string_value_json_storage_cls(
+                namespace=make_namespace(
+                    self.namespace_prefix, NameSpace.KV_STORE_LLM_RESPONSE_CACHE
+                ),
+                global_config=asdict(self),
+                embedding_func=self.embedding_func,
+            ),
+        )
+
+        param.hl_keywords = (hl_keywords,)
+        param.ll_keywords = (ll_keywords,)
+
+        # ---------------------
+        # STEP 2: Final Query Logic
+        # ---------------------
+
+        # Create a new string with the prompt and the keywords
+        ll_keywords_str = ", ".join(ll_keywords)
+        hl_keywords_str = ", ".join(hl_keywords)
+        formatted_question = f"{prompt}\n\n### Keywords:\nHigh-level: {hl_keywords_str}\nLow-level: {ll_keywords_str}\n\n### Query:\n{query}"
+
+        if param.mode in ["local", "global", "hybrid"]:
+            response = await kg_query_with_keywords(
+                formatted_question,
+                self.chunk_entity_relation_graph,
+                self.entities_vdb,
+                self.relationships_vdb,
+                self.text_chunks,
+                param,
+                asdict(self),
+                hashing_kv=self.llm_response_cache
+                if self.llm_response_cache
+                and hasattr(self.llm_response_cache, "global_config")
+                else self.key_string_value_json_storage_cls(
+                    namespace=make_namespace(
+                        self.namespace_prefix, NameSpace.KV_STORE_LLM_RESPONSE_CACHE
+                    ),
+                    global_config=asdict(self),
+                    embedding_func=self.embedding_funcne,
+                ),
+            )
+        elif param.mode == "naive":
+            response = await naive_query(
+                formatted_question,
+                self.chunks_vdb,
+                self.text_chunks,
+                param,
+                asdict(self),
+                hashing_kv=self.llm_response_cache
+                if self.llm_response_cache
+                and hasattr(self.llm_response_cache, "global_config")
+                else self.key_string_value_json_storage_cls(
+                    namespace=make_namespace(
+                        self.namespace_prefix, NameSpace.KV_STORE_LLM_RESPONSE_CACHE
+                    ),
+                    global_config=asdict(self),
+                    embedding_func=self.embedding_func,
+                ),
+            )
+        elif param.mode == "mix":
+            response = await mix_kg_vector_query(
+                formatted_question,
+                self.chunk_entity_relation_graph,
+                self.entities_vdb,
+                self.relationships_vdb,
+                self.chunks_vdb,
+                self.text_chunks,
+                param,
+                asdict(self),
+                hashing_kv=self.llm_response_cache
+                if self.llm_response_cache
+                and hasattr(self.llm_response_cache, "global_config")
+                else self.key_string_value_json_storage_cls(
+                    namespace=make_namespace(
+                        self.namespace_prefix, NameSpace.KV_STORE_LLM_RESPONSE_CACHE
+                    ),
+                    global_config=asdict(self),
+                    embedding_func=self.embedding_func,
+                ),
+            )
+        else:
+            raise ValueError(f"Unknown mode {param.mode}")
+
         await self._query_done()
         return response
 
@@ -702,7 +1079,7 @@ class LightRAG:
             return content
         return content[:max_length] + "..."
 
-    async def get_processing_status(self) -> Dict[str, int]:
+    async def get_processing_status(self) -> dict[str, int]:
         """Get current document processing status counts
 
         Returns:

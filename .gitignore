@@ -27,3 +27,6 @@ data/*
 .DS_Store
 *.ipynb
 29_ctx
+.DS_Store
+#Remove config.ini from repo
+*.ini
